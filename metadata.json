@@ -1,0 +1,6 @@
+{
+  "name": "Blogs",
+  "description": "A professional-grade blogging platform with markdown support, Firestore integration, and an administrative dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Post Validation ---
+    function isValidPost(data) {
+      return data.keys().hasAll(['title', 'slug', 'content', 'authorId', 'createdAt', 'updatedAt', 'published'])
+        && data.title is string && data.title.size() <= 200
+        && data.slug is string && data.slug.size() <= 200
+        && data.content is string && data.content.size() <= 50000
+        && data.authorId == request.auth.uid
+        && data.published is bool
+        && data.updatedAt == request.time;
+    }
+
+    // --- Rules ---
+
+    match /posts/{postId} {
+      allow get: if existing().published == true || isOwner(existing().authorId);
+      allow list: if resource.data.published == true || isOwner(resource.data.authorId);
+      
+      allow create: if isSignedIn() 
+        && isValidId(postId)
+        && isValidPost(incoming())
+        && incoming().createdAt == request.time;
+
+      allow update: if isOwner(existing().authorId)
+        && isValidPost(incoming())
+        && incoming().createdAt == existing().createdAt
+        && (
+          // Action: Edit content
+          (incoming().diff(existing()).affectedKeys().hasOnly(['title', 'slug', 'content', 'excerpt', 'updatedAt', 'published', 'tags', 'authorName']))
+        );
+
+      allow delete: if isOwner(existing().authorId);
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId) 
+        && incoming().keys().hasAll(['displayName'])
+        && incoming().displayName is string && incoming().displayName.size() <= 100;
+    }
+  }
+}

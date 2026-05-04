@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,400;1,700&display=swap');
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", serif;
+  
+  --color-accent: #6d16f2;
+  --color-accent-hover: #5b12cb;
+  --color-ink: #20222d;
+  --color-ink-muted: #64748b;
+  --color-bg-soft: #f7f7fb;
+  
+  --shadow-clean: 0 18px 50px rgba(32, 34, 45, 0.08);
+  --shadow-premium: 0 24px 65px rgba(32, 34, 45, 0.12);
+}
+
+@layer base {
+  body {
+    @apply bg-bg-soft text-ink font-sans selection:bg-purple-100 selection:text-accent overflow-x-hidden;
+  }
+}
+
+@layer utilities {
+  .cursor-glow {
+    position: fixed;
+    width: 260px;
+    height: 260px;
+    border-radius: 999px;
+    pointer-events: none;
+    background: radial-gradient(circle, rgba(109,22,242,0.14), transparent 65%);
+    filter: blur(10px);
+    transform: translate(-50%, -50%);
+    z-index: -1;
+  }
+
+  .floating-blob {
+    position: fixed;
+    border-radius: 999px;
+    filter: blur(55px);
+    opacity: 0.32;
+    z-index: -2;
+    animation: blobMove 12s ease-in-out infinite alternate;
+  }
+
+  .blob-one {
+    width: 280px;
+    height: 280px;
+    top: 8%;
+    left: -90px;
+    background: #a855f7;
+  }
+
+  .blob-two {
+    width: 340px;
+    height: 340px;
+    right: -130px;
+    bottom: 18%;
+    background: #6d16f2;
+    animation-delay: 2s;
+  }
+
+  .gradient-word {
+    background: linear-gradient(90deg, #6d16f2, #9333ea, #20222d, #6d16f2);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: gradientText 5s ease infinite;
+  }
+
+  @keyframes gradientText {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+}
+
+@layer components {
+  .glass-header {
+    @apply fixed top-0 left-0 z-50 w-full border-b border-white/5 bg-white/10 backdrop-blur-xl transition-all duration-300;
+  }
+
+  .premium-card {
+    @apply bg-white/90 rounded-[2rem] p-7 shadow-clean transition-all duration-300 border border-slate-200/90 backdrop-blur-md hover:shadow-premium hover:-translate-y-2 hover:border-accent/35;
+  }
+
+  .badge {
+    @apply px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest;
+  }
+  
+  .badge-primary {
+    @apply bg-purple-50 text-accent;
+  }
+  
+  .nav-link {
+    @apply relative font-extrabold text-ink transition-colors hover:text-accent;
+  }
+
+  .nav-link::after {
+    content: "";
+    @apply absolute left-0 -bottom-2 w-0 h-[3px] rounded-full bg-accent transition-all duration-300;
+  }
+
+  .nav-link:hover::after {
+    @apply w-full;
+  }
+}
