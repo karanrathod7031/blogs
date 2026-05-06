@@ -398,7 +398,7 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
             />
           )}
 
-          <div className="prose prose-sm md:prose-lg max-w-none prose-headings:text-ink prose-headings:font-black prose-p:text-ink-muted prose-p:leading-relaxed prose-a:text-accent prose-blockquote:border-l-accent prose-blockquote:bg-bg-soft prose-blockquote:rounded-r-xl prose-img:rounded-3xl">
+          <div className="prose prose-sm md:prose-lg max-w-none prose-headings:text-ink prose-headings:font-black prose-p:text-ink-muted prose-p:leading-relaxed prose-strong:text-ink prose-strong:font-black prose-a:text-accent prose-blockquote:border-l-accent prose-blockquote:bg-bg-soft prose-blockquote:rounded-r-xl prose-img:rounded-3xl">
             <ReactMarkdown>{post.content}</ReactMarkdown>
           </div>
 

@@ -14,7 +14,6 @@ import {
   or,
   and,
   increment,
-  setDoc,
   limit,
   startAfter,
   QueryDocumentSnapshot
@@ -52,7 +51,7 @@ export async function isPostLiked(postId: string, userId: string): Promise<boole
   try {
     const likeSnap = await getDoc(doc(db, COLLECTION_NAME, postId, 'likes', userId));
     return likeSnap.exists();
-  } catch (err) {
+  } catch {
     return false;
   }
 }
@@ -64,7 +63,8 @@ export async function addComment(postId: string, authorId: string, authorName: s
     authorName,
     authorPhoto: authorPhoto || null,
     content,
-    createdAt: serverTimestamp()
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
   };
 
   try {
@@ -72,8 +72,9 @@ export async function addComment(postId: string, authorId: string, authorName: s
     return {
       id: docRef.id,
       ...commentData,
-      createdAt: Timestamp.now() // For immediate UI feedback
-    } as any;
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    } as unknown as Comment;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'comments');
     throw error;

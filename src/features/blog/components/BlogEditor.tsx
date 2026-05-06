@@ -242,7 +242,7 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
                </div>
              )}
 
-             <div className="prose prose-sm md:prose-lg max-w-none prose-headings:font-black prose-headings:text-ink prose-p:text-ink-muted prose-a:text-accent">
+             <div className="prose prose-sm md:prose-lg max-w-none prose-headings:font-black prose-headings:text-ink prose-p:text-ink-muted prose-strong:text-ink prose-strong:font-black prose-a:text-accent">
                <ReactMarkdown>{content || '*The canvas is currently empty.*'}</ReactMarkdown>
              </div>
           </article>
