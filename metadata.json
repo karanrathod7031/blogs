@@ -1,6 +1,6 @@
 {
-  "name": "Blogs",
-  "description": "A professional-grade blogging platform with markdown support, Firestore integration, and an administrative dashboard.",
+  "name": "Networking Hub",
+  "description": "A collaborative professional network for sharing insights, trade dispatches, and engineering narratives.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

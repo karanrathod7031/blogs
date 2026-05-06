@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import Layout from './components/Layout';
-import BlogList from './components/BlogList';
-import BlogPostView from './components/BlogPost';
-import BlogEditor from './components/BlogEditor';
-import Dashboard from './components/Dashboard';
+import { useState, useEffect, useCallback } from 'react';
+import Layout from './components/layout/Layout';
+import BlogList from './features/blog/components/BlogList';
+import BlogPostView from './features/blog/components/BlogPost';
+import BlogEditor from './features/blog/components/BlogEditor';
+import Dashboard from './features/user/components/Dashboard';
+import PublicProfile from './features/user/components/PublicProfile';
+import { AdminDashboard } from './features/admin/components/AdminDashboard';
 import { BlogPost, View } from './types';
+import { ConfirmationModal } from './components/ui/ConfirmationModal';
 import { 
   getPublishedPosts, 
   getPostBySlug, 
@@ -15,118 +17,238 @@ import {
   getAllPostsForUser 
 } from './services/blogService';
 import { useAuthState } from './hooks/useAuthState';
+import { NotificationProvider, useNotification } from './components/ui/Toast';
+import { ThemeProvider } from './core/contexts/ThemeContext';
+import { RestrictedAccess } from './features/user/components/auth/RestrictedAccess';
+import { QueryDocumentSnapshot } from 'firebase/firestore';
+import { usePerformanceMonitoring } from './core/scaling/PerformanceMonitor';
+import { cacheStrategy } from './core/scaling/CacheStrategy';
 
-export default function App() {
+function AppContent() {
   const [view, setView] = useState<View>('list');
+  const [prevView, setPrevView] = useState<View>('list');
   const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   const [currentPost, setCurrentPost] = useState<BlogPost | null>(null);
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<BlogPost | undefined>(undefined);
   const [loading, setLoading] = useState(true);
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-  const { user } = useAuthState();
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [deletingPostIds, setDeletingPostIds] = useState<Set<string>>(new Set());
+  const { user, profile, loading: authLoading } = useAuthState();
+  const { notify } = useNotification();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
+  usePerformanceMonitoring('AppMainFeed');
 
-  const fetchPosts = async () => {
-    setLoading(true);
-    try {
-      let data;
+  const navTo = useCallback((newView: View) => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    setView(prev => {
+      setPrevView(prev === 'post' || prev === 'profile' ? prevView : prev);
+      return newView;
+    });
+  }, [prevView]);
+
+  const fetchPosts = useCallback(async (isLoadMore = false) => {
+    if (isLoadMore) setLoadingMore(true);
+    else {
+      // Check cache first for initial load to scale to 10,000+ users without DB stress
       if (view === 'list') {
-        data = await getPublishedPosts();
-      } else if (view === 'admin' && user) {
-        data = await getAllPostsForUser(user.uid);
-      } else {
-        data = posts;
+        const cached = cacheStrategy.get<{ posts: BlogPost[], hasMore: boolean }>('published_posts_v2');
+        if (cached) {
+          setPosts(cached.posts);
+          setHasMore(cached.hasMore);
+          setLoading(false);
+          // Still fetch in background to sync (SWR pattern)
+        }
       }
-      setPosts(data);
+      setLoading(true);
+    }
+
+    try {
+      if (view === 'list') {
+        const result = await getPublishedPosts(isLoadMore ? (lastDoc || undefined) : undefined);
+        const newHasMore = result.posts.length === 9;
+
+        if (isLoadMore) {
+          setPosts(prev => [...prev, ...result.posts]);
+        } else {
+          setPosts(result.posts);
+          // Only cache the first page for optimal scaling
+          cacheStrategy.set('published_posts_v2', { 
+            posts: result.posts, 
+            hasMore: newHasMore 
+          });
+        }
+        setLastDoc(result.lastVisible);
+        setHasMore(newHasMore);
+      } else if (view === 'admin' && user) {
+        const data = await getAllPostsForUser(user.uid);
+        setPosts(data);
+        setHasMore(false);
+      }
     } catch (err) {
-      showNotification('Failed to fetch posts', 'error');
+      notify('Failed to fetch synchronization signals', 'error');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  };
+  }, [view, user, lastDoc, notify]);
 
   useEffect(() => {
-    fetchPosts();
+    if (view === 'list' || view === 'admin') {
+      fetchPosts(false);
+    }
   }, [view, user]);
 
-  const handleSelectPost = async (slug: string) => {
+  const handleLoadMore = useCallback(() => {
+    if (!loadingMore && hasMore) {
+      fetchPosts(true);
+    }
+  }, [loadingMore, hasMore, fetchPosts]);
+
+  const handleSelectPost = useCallback(async (slug: string) => {
+    console.log('[App] Selection Request for SLUG:', slug);
+    if (!slug) {
+      console.error('[App] Selection FAILED: Missing slug');
+      notify('Target slug missing from source data', 'error');
+      return;
+    }
+
+    window.scrollTo({ top: 0, behavior: 'instant' });
     setLoading(true);
     try {
       const post = await getPostBySlug(slug);
+      console.log('[App] Selection RESOLVED:', post ? 'Found' : 'NULL');
       if (post) {
         setCurrentPost(post);
-        setView('post');
+        navTo('post');
       } else {
-        showNotification('Post not found', 'error');
+        notify('Terminal not found in Global Archive', 'error');
       }
     } catch (err) {
-      showNotification('Error loading post', 'error');
+      console.error('[App] Selection ERROR:', err);
+      notify('Connection timeout or protocol violation', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [notify, navTo]);
+
+  const handleViewProfile = useCallback((userId: string) => {
+    setCurrentProfileId(userId);
+    navTo('profile');
+  }, [navTo]);
 
   const handleSavePost = async (data: Partial<BlogPost>) => {
     try {
       if (editingPost) {
         await updatePost(editingPost.id, data);
-        showNotification('Entry updated successfully');
+        notify('Archive updated successfully', 'success');
       } else {
         await createPost(data);
-        showNotification('New entry published');
+        notify('New signal broadcasted', 'success');
       }
-      setView('admin');
+      navTo('admin');
       fetchPosts();
     } catch (err) {
-      showNotification('Failed to save entry', 'error');
+      notify('Sync failure: protocol error', 'error');
     }
   };
 
   const handleDeletePost = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this entry?')) {
-      try {
-        await deletePost(id);
-        showNotification('Entry deleted');
-        fetchPosts();
-      } catch (err) {
-        showNotification('Failed to delete entry', 'error');
-      }
+    setConfirmDeleteId(id);
+  };
+
+  const executeDeletePost = async (id: string) => {
+    setDeletingPostIds(prev => new Set(prev).add(id));
+    setConfirmDeleteId(null);
+    try {
+      await deletePost(id);
+      setPosts(prev => prev.filter(p => p.id !== id));
+      notify('Archive entry terminated', 'success');
+    } catch (err) {
+      notify('Termination failure: security override active', 'error');
+    } finally {
+      setDeletingPostIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="fixed inset-0 bg-[#020617] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-slate-800 border-t-accent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (profile?.suspended) {
+    return <RestrictedAccess reason="suspended" />;
+  }
 
   const renderContent = () => {
     if (loading && posts.length === 0) {
       return (
         <div className="py-40 flex items-center justify-center">
-          <div className="w-12 h-12 border-2 border-[#141414]/10 border-t-[#141414] rounded-full animate-spin" />
+          <div className="w-12 h-12 border-2 border-slate-800 border-t-accent rounded-full animate-spin" />
         </div>
       );
     }
 
     switch (view) {
       case 'list':
-        return <BlogList posts={posts} onSelectPost={handleSelectPost} />;
+        return (
+          <BlogList 
+            posts={posts} 
+            onSelectPost={handleSelectPost} 
+            onViewProfile={handleViewProfile}
+            onLoadMore={handleLoadMore}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+          />
+        );
       case 'post':
         return currentPost ? (
-          <BlogPostView post={currentPost} onBack={() => setView('list')} allPosts={posts} />
+          <BlogPostView 
+            post={currentPost} 
+            onBack={() => navTo(prevView)} 
+            onSelectPost={handleSelectPost}
+            allPosts={posts} 
+            onNotify={notify} 
+            onViewProfile={handleViewProfile} 
+          />
+        ) : null;
+      case 'profile':
+        return currentProfileId ? (
+          <PublicProfile userId={currentProfileId} onBack={() => navTo(prevView)} onViewPost={handleSelectPost} />
         ) : null;
       case 'admin':
         return user ? (
           <Dashboard 
             posts={posts} 
-            onNew={() => { setEditingPost(undefined); setView('editor'); }} 
-            onEdit={(post) => { setEditingPost(post); setView('editor'); }}
+            onNew={() => { setEditingPost(undefined); navTo('editor'); }} 
+            onEdit={(post) => { setEditingPost(post); navTo('editor'); }}
             onDelete={handleDeletePost}
             onView={handleSelectPost}
-            onNotify={showNotification}
+            onNotify={notify}
+            deletingPostIds={deletingPostIds}
           />
         ) : (
           <div className="text-center py-20">
-            <p className="text-xl font-serif italic">Please login to access the studio.</p>
+            <p className="text-xl font-serif italic text-slate-600">Credential authorization required.</p>
+          </div>
+        );
+      case 'admin-panel':
+        const isAdmin = profile?.role === 'admin' || user?.email === 'rk.upk2345678@gmail.com';
+        return isAdmin ? (
+          <AdminDashboard onViewPost={handleSelectPost} />
+        ) : (
+          <div className="text-center py-20">
+             <p className="text-xl font-serif italic text-rose-500">Master Clearance Required.</p>
           </div>
         );
       case 'editor':
@@ -134,8 +256,9 @@ export default function App() {
           <BlogEditor 
             post={editingPost} 
             onSave={handleSavePost} 
-            onCancel={() => setView(user ? 'admin' : 'list')}
+            onCancel={() => navTo(user ? 'admin' : 'list')}
             onDelete={handleDeletePost}
+            onNotify={notify}
           />
         );
       default:
@@ -144,31 +267,31 @@ export default function App() {
   };
 
   return (
-    <>
-      <Layout 
-        activeView={view} 
-        onViewChange={setView}
-        onNew={() => { setEditingPost(undefined); setView('editor'); }}
-      >
-        {renderContent()}
-      </Layout>
+    <Layout 
+      activeView={view} 
+      onViewChange={navTo}
+      onNew={() => { setEditingPost(undefined); navTo('editor'); }}
+    >
+      {renderContent()}
+      
+      <ConfirmationModal
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => confirmDeleteId && executeDeletePost(confirmDeleteId)}
+        title="Confirm Termination"
+        message="This action will permanently remove this entry from the Global Archive. This process is irreversible."
+        confirmLabel="Terminate Dispatch"
+      />
+    </Layout>
+  );
+}
 
-      {/* Notification Toast */}
-      {notification && (
-        <motion.div 
-          initial={{ opacity: 0, y: 50, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 50, scale: 0.9 }}
-          className={`fixed bottom-12 left-1/2 -translate-x-1/2 px-8 py-4 rounded-2xl text-[10px] md:text-xs font-black uppercase tracking-[0.3em] shadow-2xl z-[100] backdrop-blur-xl border border-white/10 ${
-            notification.type === 'success' ? 'bg-[#1A1A1A] text-white' : 'bg-red-600 text-white shadow-red-900/20'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-             <div className={`w-2 h-2 rounded-full ${notification.type === 'success' ? 'bg-emerald-400' : 'bg-white'} animate-pulse`} />
-            {notification.message}
-          </div>
-        </motion.div>
-      )}
-    </>
+export default function App() {
+  return (
+    <ThemeProvider>
+      <NotificationProvider>
+        <AppContent />
+      </NotificationProvider>
+    </ThemeProvider>
   );
 }

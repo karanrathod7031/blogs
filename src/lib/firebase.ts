@@ -1,10 +1,28 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { 
+  getFirestore, 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager 
+} from 'firebase/firestore';
+// Firebase configuration from environment variables (for Vercel/Production)
+// Fallback values can be found in firebase-applet-config.json if running locally
+const config = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || '(default)'
+};
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+const app = initializeApp(config);
+
+// Simplified Firestore initialization for better compatibility
+export const db = getFirestore(app, config.firestoreDatabaseId);
+
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
