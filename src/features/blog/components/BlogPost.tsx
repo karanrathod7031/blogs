@@ -320,7 +320,7 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
             className="max-w-7xl mx-auto py-8 px-4 md:px-10 touch-pan-y"
             style={{ x: dragX }}
           >
-            {/* Swipe Back Indicator */}
+            {/* Swipe Back Indicator - iOS/Android style */}
             <motion.div 
               style={{ 
                 opacity: backOpacity,
@@ -329,14 +329,13 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
                 position: 'fixed',
                 left: 0,
                 top: '50%',
-                y: '-50%',
+                marginTop: '-40px',
                 zIndex: 100,
                 pointerEvents: 'none'
               }}
-              className="flex items-center gap-2 px-6 py-4 bg-accent text-slate-900 rounded-r-full shadow-2xl border-2 border-white/20"
+              className="flex items-center justify-center w-16 h-20 bg-accent/90 backdrop-blur-md text-slate-900 rounded-r-[3rem] shadow-[10px_0_30px_rgba(0,0,0,0.3)] border-r-4 border-white/30"
             >
-              <ArrowLeft className="w-6 h-6 stroke-[3]" />
-              <span className="text-xs font-black uppercase tracking-widest">Back</span>
+              <ArrowLeft className="w-8 h-8 stroke-[4] -p-1" />
             </motion.div>
 
             <div className="mb-8">

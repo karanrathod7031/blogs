@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Save, Eye, Edit3, Sparkles, X, Trash2, Image as ImageIcon, Tags, Layout, Globe, Bold, Italic, List, Link as LinkIcon, Quote, DollarSign, MapPin, Briefcase, Upload } from 'lucide-react';
+import { Eye, Edit3, X, Image as ImageIcon, Layout, Globe, Bold, Italic, List, Link as LinkIcon, Upload } from 'lucide-react';
 import { BlogPost } from '../../../types';
 import ReactMarkdown from 'react-markdown';
 import { GoogleGenAI } from "@google/genai";

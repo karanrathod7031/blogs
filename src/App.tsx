@@ -27,6 +27,23 @@ import { cacheStrategy } from './core/scaling/CacheStrategy';
 function AppContent() {
   const [view, setView] = useState<View>('list');
   const [prevView, setPrevView] = useState<View>('list');
+
+  // Sync view with browser history for hardware back button support
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.view) {
+        setView(event.state.view);
+      } else {
+        setView('list');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    if (!window.history.state) {
+      window.history.replaceState({ view: 'list' }, '');
+    }
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -44,11 +61,17 @@ function AppContent() {
 
   const navTo = useCallback((newView: View) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
+    
+    // Update history for back button support
+    if (newView !== view) {
+      window.history.pushState({ view: newView }, '');
+    }
+
     setView(prev => {
       setPrevView(prev === 'post' || prev === 'profile' ? prevView : prev);
       return newView;
     });
-  }, [prevView]);
+  }, [view, prevView]);
 
   const fetchPosts = useCallback(async (isLoadMore = false) => {
     if (isLoadMore) setLoadingMore(true);
