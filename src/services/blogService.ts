@@ -36,10 +36,16 @@ export async function toggleLike(postId: string, userId: string, currentlyLiked:
   try {
     if (currentlyLiked) {
       batch.delete(likeRef);
-      batch.update(postRef, { likeCount: increment(-1) });
+      batch.update(postRef, { 
+        likeCount: increment(-1),
+        updatedAt: serverTimestamp()
+      });
     } else {
       batch.set(likeRef, { userId, timestamp: serverTimestamp() });
-      batch.update(postRef, { likeCount: increment(1) });
+      batch.update(postRef, { 
+        likeCount: increment(1),
+        updatedAt: serverTimestamp()
+      });
     }
     await batch.commit();
   } catch (error) {
@@ -126,7 +132,7 @@ export async function getPublishedPosts(lastDoc?: QueryDocumentSnapshot): Promis
       const querySnapshot = await getDocs(q);
       const posts = querySnapshot.docs.map(doc => ({
         id: doc.id,
-        ...(doc.data() as any)
+        ...doc.data()
       } as BlogPost));
       
       const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1] || null;
@@ -155,7 +161,7 @@ export async function getPublishedPostsForUser(userId: string): Promise<BlogPost
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
-        ...(doc.data() as any)
+        ...doc.data()
       } as BlogPost));
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
@@ -176,7 +182,7 @@ export async function getAllPostsForUser(userId: string): Promise<BlogPost[]> {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
-      ...(doc.data() as any)
+      ...doc.data()
     } as BlogPost));
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
@@ -209,7 +215,7 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
       const querySnapshot = await getDocs(q);
       if (querySnapshot.empty) return null;
       const docSnap = querySnapshot.docs[0];
-      const postData = docSnap.data() as any;
+      const postData = docSnap.data() as BlogPost;
       
       // Increment view count asynchronously
       if (postData.published) {
@@ -223,7 +229,7 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
       return {
         id: docSnap.id,
         ...postData
-      } as BlogPost;
+      };
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, COLLECTION_NAME);
       return null;
@@ -236,7 +242,7 @@ export async function createPost(postData: Partial<BlogPost>): Promise<string> {
   if (!user) throw new Error('Must be logged in to create a post');
 
   const post = {
-    ...(postData as any),
+    ...postData,
     authorId: user.uid,
     authorName: user.displayName || 'Anonymous',
     createdAt: serverTimestamp(),

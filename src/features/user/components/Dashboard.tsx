@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Edit2, Globe, Lock, Trash2, Settings, FileText, Search, MoreHorizontal, ExternalLink } from 'lucide-react';
+import { Plus, Edit2, Globe, Lock, Trash2, Settings, FileText, Search, ExternalLink } from 'lucide-react';
 import { BlogPost } from '../../../types';
 import { format } from 'date-fns';
 import { ProfileEditor } from './ProfileEditor';

@@ -133,6 +133,74 @@
   .nav-link:hover::after, .nav-link.active::after {
     @apply w-full;
   }
+
+  /* Table and Alignment styles for prose */
+  .prose table {
+    @apply w-full border-collapse my-6;
+  }
+  .prose th, .prose td {
+    @apply border border-border px-4 py-2 text-sm;
+  }
+  .prose th {
+    @apply bg-bg-soft font-black text-ink uppercase tracking-wider text-[11px];
+  }
+  
+  .prose [align="center"] {
+    @apply text-center mx-auto block w-full;
+  }
+  .prose [align="right"] {
+    @apply text-right block w-full;
+  }
+  .prose [align="left"] {
+    @apply text-left block w-full;
+  }
+
+  /* Tiptap specific styles */
+  .ProseMirror {
+    @apply outline-none h-full min-h-[600px] p-6 md:p-8;
+  }
+
+  /* Custom Scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full hover:bg-accent/50 transition-colors;
+  }
+
+  .ProseMirror p.is-editor-empty:first-child::before {
+    @apply text-ink-muted/30 content-[attr(data-placeholder)] float-left h-0 pointer-events-none;
+  }
+
+  .ProseMirror table {
+    @apply w-full border-collapse my-6;
+  }
+  
+  .ProseMirror th, .ProseMirror td {
+    @apply border border-border px-4 py-2 text-sm relative min-w-[100px];
+  }
+
+  .ProseMirror th {
+    @apply bg-bg-soft font-black text-ink uppercase tracking-wider text-[11px];
+  }
+
+  .ProseMirror blockquote {
+    @apply border-l-4 border-accent pl-4 italic bg-bg-soft py-1 rounded-r-xl;
+  }
+
+  .ProseMirror .selectedCell:after {
+    @apply absolute bg-accent/10 inset-0 pointer-events-none content-[''];
+  }
 }
 
 @keyframes blobMove {

@@ -1,10 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { 
-  getFirestore, 
-  initializeFirestore, 
-  persistentLocalCache, 
-  persistentMultipleTabManager 
+  getFirestore
 } from 'firebase/firestore';
 // Firebase configuration from environment variables (for Vercel/Production)
 // Fallback values can be found in firebase-applet-config.json if running locally

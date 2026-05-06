@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { onSnapshot, doc, getDoc, setDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
@@ -29,11 +29,14 @@ export function useAuthState() {
             setLoading(false);
           } else {
             console.log('Profile missing, attempting to initialize identity registry...');
-            const newProfile: any = {
+            const newProfile: UserProfile = {
               uid: authUser.uid,
               displayName: authUser.displayName || 'Anonymous User',
               email: authUser.email || '',
               photoURL: authUser.photoURL || '',
+              bio: '',
+              location: '',
+              website: '',
               role: authUser.email === 'rk.upk2345678@gmail.com' ? 'admin' : 'user',
               suspended: false,
               createdAt: serverTimestamp()

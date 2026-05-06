@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Save, User as UserIcon, Camera, AtSign, FileText, Upload, Eye, X } from 'lucide-react';
+import { Save, User as UserIcon, Camera, FileText, Upload, Eye, X } from 'lucide-react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../../lib/firebase';
 import { UserProfile } from '../../../types';
@@ -49,9 +49,6 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-
           // Square target for DP
           const SIZE = 400;
           

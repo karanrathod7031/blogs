@@ -1,8 +1,47 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Eye, Edit3, X, Image as ImageIcon, Layout, Globe, Bold, Italic, List, Link as LinkIcon, Upload } from 'lucide-react';
+import { 
+  Eye, 
+  Edit3, 
+  X, 
+  Image as ImageIcon, 
+  Layout, 
+  Globe,
+  Bold, 
+  Italic, 
+  List, 
+  Link as LinkIcon, 
+  Upload, 
+  ListOrdered, 
+  Table as TableIcon, 
+  AlignCenter, 
+  AlignRight, 
+  Code,
+  Quote,
+  Heading as HeadingIcon,
+  Underline as UnderlineIcon,
+  Strikethrough,
+  ChevronDown
+} from 'lucide-react';
 import { BlogPost } from '../../../types';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import TurndownService from 'turndown';
+// @ts-expect-error - turndown-plugin-gfm doesn't have types
+import { gfm } from 'turndown-plugin-gfm';
+import { useEditor, EditorContent } from '@tiptap/react';
+import { StarterKit } from '@tiptap/starter-kit';
+import { Markdown } from 'tiptap-markdown';
+import { Placeholder } from '@tiptap/extension-placeholder';
+import { Link as LinkExtension } from '@tiptap/extension-link';
+import { Underline as UnderlineExtension } from '@tiptap/extension-underline';
+import { Image as ImageExtension } from '@tiptap/extension-image';
+import { Table as TiptapTable } from '@tiptap/extension-table';
+import { TableRow as TiptapTableRow } from '@tiptap/extension-table-row';
+import { TableHeader as TiptapTableHeader } from '@tiptap/extension-table-header';
+import { TableCell as TiptapTableCell } from '@tiptap/extension-table-cell';
+import { TextAlign } from '@tiptap/extension-text-align';
 import { GoogleGenAI } from "@google/genai";
 
 interface BlogEditorProps {
@@ -24,9 +63,22 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
   const [tags, setTags] = useState<string[]>(post?.tags || []);
   const [newTag, setNewTag] = useState('');
   const [category, setCategory] = useState(post?.category || 'Engineering');
+  const [isSlugAuto, setIsSlugAuto] = useState(!post?.slug);
   const [customCategory, setCustomCategory] = useState(!CATEGORIES.includes(post?.category || 'Engineering') ? (post?.category || '') : '');
   const [coverImage, setCoverImage] = useState(post?.coverImage || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showHeadings, setShowHeadings] = useState(false);
+  const headingDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (headingDropdownRef.current && !headingDropdownRef.current.contains(event.target as Node)) {
+        setShowHeadings(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -95,32 +147,83 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
   const [saving, setSaving] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
 
-  const insertFormatting = (prefix: string, suffix: string = prefix) => {
-    const textarea = document.getElementById('content-editor') as HTMLTextAreaElement;
-    if (!textarea) return;
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3, 4, 5, 6],
+        },
+      }),
+      Markdown,
+      UnderlineExtension,
+      LinkExtension.configure({
+        openOnClick: false,
+      }),
+      Placeholder.configure({
+        placeholder: 'Pasted from Word/Docs will preserve formatting! Start writing your story here...',
+      }),
+      ImageExtension,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      TiptapTable.configure({
+        resizable: true,
+      }),
+      TiptapTableRow,
+      TiptapTableHeader,
+      TiptapTableCell,
+    ],
+    content: content,
+    onUpdate: ({ editor }) => {
+      try {
+        // @ts-expect-error - tiptap-markdown adds getMarkdown
+        const md = editor.getMarkdown();
+        setContent(md);
+      } catch (err) {
+        console.warn('tiptap-markdown failed, falling back to turndown:', err);
+        const html = editor.getHTML();
+        const turndownService = new TurndownService({
+          headingStyle: 'atx',
+          codeBlockStyle: 'fenced',
+          bulletListMarker: '-'
+        });
+        // @ts-expect-error - gfm plugin types
+        turndownService.use(gfm);
+        const md = turndownService.turndown(html);
+        setContent(md);
+      }
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm md:prose-base max-w-none focus:outline-none min-h-[600px] p-6 md:p-8',
+      },
+    },
+  });
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selection = text.substring(start, end);
-    const before = text.substring(0, start);
-    const after = text.substring(end);
+  // Sync content if changed externally (e.g. initial load)
+  useEffect(() => {
+    if (editor && content !== editor.getHTML() && content !== editor.getText()) {
+      // Basic check to see if we need to sync. 
+      // If the editor is empty and we have content, we should set it.
+      if (editor.isEmpty && content) {
+        editor.commands.setContent(content);
+      }
+    }
+  }, [content, editor]);
 
-    const newValue = before + prefix + (selection || 'text') + suffix + after;
-    setContent(newValue);
-    
-    // Reset focus and selection
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, end + prefix.length);
-    }, 0);
+  const slugify = (text: string) => {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
   };
 
   useEffect(() => {
-    if (!post && title) {
-      setSlug(title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+    // Sync slug if auto-sync is on OR if we are on a new post and title is being typed
+    if (isSlugAuto && title) {
+      setSlug(slugify(title));
     }
-  }, [title, post]);
+  }, [title, isSlugAuto]);
 
   const handleSummarize = async () => {
     if (!content) return;
@@ -129,11 +232,12 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Create a brief, compelling 1-2 sentence excerpt for this blog post. Body: ${content}`,
+        contents: `Summarize the following blog post in exactly 1-2 sentences. Return ONLY the plain text summary. Do not include any labels, options, conversational filler, or markdown formatting like bold (**). Body: ${content}`,
       });
       const text = response.text;
       if (text) {
-        setExcerpt(text.trim());
+        // Clean up any remaining markdown bold markers just in case
+        setExcerpt(text.trim().replace(/\*\*/g, ''));
       }
     } catch (err) {
       console.error(err);
@@ -235,15 +339,17 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
                  </p>
                )}
              </header>
+ 
+             <div className="max-h-[70vh] overflow-y-auto scrollbar-thin pr-4 -mr-4">
+               {coverImage && (
+                 <div className="aspect-[21/9] rounded-2xl overflow-hidden mb-10 shadow-sm border border-border">
+                   <img src={coverImage} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                 </div>
+               )}
 
-             {coverImage && (
-               <div className="aspect-[21/9] rounded-2xl overflow-hidden mb-10 shadow-sm border border-border">
-                 <img src={coverImage} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+               <div className="prose prose-sm md:prose-lg max-w-none prose-headings:font-black prose-headings:text-ink prose-p:text-ink-muted prose-strong:text-ink prose-strong:font-black prose-a:text-accent prose-table:border prose-table:border-border prose-th:bg-bg-soft prose-th:px-4 prose-th:py-2 prose-td:border prose-td:border-border prose-td:px-4 prose-td:py-2">
+                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{content || '*The canvas is currently empty.*'}</ReactMarkdown>
                </div>
-             )}
-
-             <div className="prose prose-sm md:prose-lg max-w-none prose-headings:font-black prose-headings:text-ink prose-p:text-ink-muted prose-strong:text-ink prose-strong:font-black prose-a:text-accent">
-               <ReactMarkdown>{content || '*The canvas is currently empty.*'}</ReactMarkdown>
              </div>
           </article>
           </motion.div>
@@ -311,26 +417,175 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
                     />
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <label className="text-[9px] font-black text-ink-muted uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Edit3 className="w-3 h-3 text-accent" /> Discourse (Markdown supported)
-                      </label>
-                      <div className="flex gap-1 bg-bg p-1 rounded-lg border border-border">
-                        <button type="button" onClick={() => insertFormatting('**', '**')} className="p-1.5 hover:bg-bg-soft rounded text-ink-muted hover:text-accent" title="Bold"><Bold className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => insertFormatting('_', '_')} className="p-1.5 hover:bg-bg-soft rounded text-ink-muted hover:text-accent" title="Italic"><Italic className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => insertFormatting('\n- ', '')} className="p-1.5 hover:bg-bg-soft rounded text-ink-muted hover:text-accent" title="List"><List className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => insertFormatting('[', '](url)')} className="p-1.5 hover:bg-bg-soft rounded text-ink-muted hover:text-accent" title="Link"><LinkIcon className="w-3.5 h-3.5" /></button>
+                  <div className="space-y-4">
+                    <div className="flex flex-col space-y-4">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[9px] font-black text-ink-muted uppercase tracking-widest flex items-center gap-2 ml-1">
+                          <Edit3 className="w-3 h-3 text-accent" /> Discourse (Markdown supported)
+                        </label>
+                        <div className="flex flex-wrap gap-1 bg-bg p-1 rounded-xl border border-border shadow-sm">
+                          {/* Typography Group */}
+                          <div className="flex gap-0.5 pr-2 border-r border-border/50">
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().toggleBold().run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('bold') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Bold (Ctrl+B)"
+                            >
+                              <Bold className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().toggleItalic().run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('italic') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Italic (Ctrl+I)"
+                            >
+                              <Italic className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().toggleUnderline().run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('underline') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Underline (Ctrl+U)"
+                            >
+                              <UnderlineIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().toggleStrike().run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('strike') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Strikethrough"
+                            >
+                              <Strikethrough className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Headers Dropdown */}
+                          <div ref={headingDropdownRef} className="relative flex items-center px-2 border-r border-border/50">
+                            <button 
+                              type="button" 
+                              onClick={() => setShowHeadings(!showHeadings)}
+                              className={`flex items-center gap-1 p-1.5 rounded-lg transition-colors ${showHeadings ? 'bg-bg-soft text-accent' : 'text-ink-muted hover:text-accent hover:bg-bg-soft'}`}
+                              title="Headings"
+                            >
+                              <HeadingIcon className="w-3.5 h-3.5" />
+                              <ChevronDown className={`w-2.5 h-2.5 transition-transform ${showHeadings ? 'rotate-180' : ''}`} />
+                            </button>
+                            {showHeadings && (
+                              <div className="absolute top-full left-0 mt-1 z-50 bg-card border border-border rounded-xl shadow-xl p-1 min-w-[120px] animate-in fade-in zoom-in duration-100">
+                                <button type="button" onClick={() => { editor?.chain().focus().toggleHeading({ level: 1 }).run(); setShowHeadings(false); }} className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${editor?.isActive('heading', { level: 1 }) ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink'}`}>H1 <span className="text-[10px] opacity-50 font-normal ml-auto">Title</span></button>
+                                <button type="button" onClick={() => { editor?.chain().focus().toggleHeading({ level: 2 }).run(); setShowHeadings(false); }} className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${editor?.isActive('heading', { level: 2 }) ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink'}`}>H2 <span className="text-[10px] opacity-50 font-normal ml-auto">Section</span></button>
+                                <button type="button" onClick={() => { editor?.chain().focus().toggleHeading({ level: 3 }).run(); setShowHeadings(false); }} className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${editor?.isActive('heading', { level: 3 }) ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink'}`}>H3 <span className="text-[10px] opacity-50 font-normal ml-auto">Sub</span></button>
+                                <button type="button" onClick={() => { editor?.chain().focus().toggleHeading({ level: 4 }).run(); setShowHeadings(false); }} className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${editor?.isActive('heading', { level: 4 }) ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink'}`}>H4</button>
+                                <button type="button" onClick={() => { editor?.chain().focus().toggleHeading({ level: 5 }).run(); setShowHeadings(false); }} className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${editor?.isActive('heading', { level: 5 }) ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink'}`}>H5</button>
+                                <button type="button" onClick={() => { editor?.chain().focus().toggleHeading({ level: 6 }).run(); setShowHeadings(false); }} className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${editor?.isActive('heading', { level: 6 }) ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink'}`}>H6</button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Lists Group */}
+                          <div className="flex gap-0.5 px-2 border-r border-border/50">
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().toggleBulletList().run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('bulletList') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Bullet List"
+                            >
+                              <List className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().toggleOrderedList().run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('orderedList') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Numbered List"
+                            >
+                              <ListOrdered className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Elements Group */}
+                          <div className="flex gap-0.5 px-2 border-r border-border/50">
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                const url = window.prompt('URL');
+                                if (url) editor?.chain().focus().setLink({ href: url }).run();
+                              }} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('link') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Link (Ctrl+K)"
+                            >
+                              <LinkIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                const url = window.prompt('Image URL');
+                                if (url) editor?.chain().focus().setImage({ src: url }).run();
+                              }} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('image') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Insert Image"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().toggleCodeBlock().run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('codeBlock') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Code Block"
+                            >
+                              <Code className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().toggleBlockquote().run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive('blockquote') ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Quote"
+                            >
+                              <Quote className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Alignment Group */}
+                          <div className="flex gap-0.5 px-2 border-r border-border/50">
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().setTextAlign('center').run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive({ textAlign: 'center' }) ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Align Center"
+                            >
+                              <AlignCenter className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().setTextAlign('right').run()} 
+                              className={`p-1.5 rounded-lg transition-colors ${editor?.isActive({ textAlign: 'right' }) ? 'bg-accent text-slate-900' : 'hover:bg-bg-soft text-ink-muted hover:text-accent'}`}
+                              title="Align Right"
+                            >
+                              <AlignRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Table Group */}
+                          <div className="flex gap-0.5 pl-2">
+                             <button 
+                              type="button" 
+                              onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} 
+                              className="p-1.5 hover:bg-bg-soft rounded-lg text-ink-muted hover:text-accent transition-colors" 
+                              title="Insert Table"
+                            >
+                              <TableIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <textarea 
-                      id="content-editor"
-                      value={content}
-                      onChange={e => setContent(e.target.value)}
-                      placeholder="Pasted text will preserve plain formatting. Use markdown for rich styles."
-                      className="w-full bg-bg-soft rounded-2xl border border-border p-6 md:p-8 min-h-[500px] text-sm md:text-base md:leading-relaxed focus:outline-none focus:border-accent focus:bg-card transition-all placeholder:text-ink-muted/30 text-ink"
-                      required
-                    />
+                    <div className="bg-bg-soft rounded-2xl border border-border min-h-[600px] max-h-[800px] overflow-y-auto scrollbar-thin transition-all focus-within:border-accent focus-within:bg-card">
+                      {editor ? (
+                        <EditorContent editor={editor} />
+                      ) : (
+                        <div className="p-8 text-ink-muted/30 italic">Initializing interface...</div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -402,12 +657,30 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
                     <div className="space-y-2">
                       <label className="text-[9px] font-black text-ink-muted uppercase tracking-widest flex items-center gap-2 ml-1">
                         <Globe className="w-3 h-3 text-accent/60" /> Slug
+                        {title && !isSlugAuto && (
+                          <button 
+                            type="button" 
+                            onClick={() => setIsSlugAuto(true)}
+                            className="ml-auto text-[8px] text-accent hover:underline lowercase font-bold"
+                          >
+                            Auto-sync
+                          </button>
+                        )}
                       </label>
                       <input 
                         value={slug}
-                        onChange={e => setSlug(e.target.value)}
-                        className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-xs font-bold outline-none text-ink-muted/80"
+                        onChange={e => {
+                          setSlug(e.target.value);
+                          setIsSlugAuto(false);
+                        }}
+                        onBlur={() => {
+                          if (!slug && title) {
+                            setIsSlugAuto(true);
+                          }
+                        }}
+                        className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-xs font-bold outline-none text-ink"
                         required
+                        placeholder="path-to-article"
                       />
                     </div>
                   </div>

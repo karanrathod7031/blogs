@@ -38,6 +38,7 @@ export default defineConfig(({mode}) => {
       alias: {
         '@': path.resolve(process.cwd()),
       },
+      dedupe: ['react', 'react-dom'],
     },
     build: {
       target: 'esnext',

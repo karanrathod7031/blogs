@@ -1,6 +1,6 @@
 import { useState, useMemo, memo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Search, Clock, Calendar, ArrowRight, BookOpen, Globe, Briefcase, MapPin, DollarSign } from 'lucide-react';
+import { Search, Clock, Calendar, ArrowRight, BookOpen, Briefcase, MapPin, DollarSign } from 'lucide-react';
 import { BlogPost } from '../../../types';
 import { format } from 'date-fns';
 import { calculateReadingTime } from '../../../lib/blog-utils';
