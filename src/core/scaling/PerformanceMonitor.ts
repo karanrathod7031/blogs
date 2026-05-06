@@ -7,16 +7,22 @@ import { useEffect, useRef } from 'react';
  */
 export function usePerformanceMonitoring(componentName: string) {
   const renderCount = useRef(0);
-  const startTime = performance.now();
+  const startTime = useRef(performance.now());
 
   useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
     renderCount.current++;
     const endTime = performance.now();
-    const duration = endTime - startTime;
+    const duration = endTime - startTime.current;
 
-    if (duration > 50) { // Increased threshold to 50ms for meaningful jank detection
+    if (duration > 50) {
       console.warn(`[Performance] ${componentName} Heavy Render: ${duration.toFixed(2)}ms`);
     }
+
+    startTime.current = performance.now();
   });
 
   return renderCount.current;

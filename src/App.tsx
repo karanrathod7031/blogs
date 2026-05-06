@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import Layout from './components/layout/Layout';
 import BlogList from './features/blog/components/BlogList';
 import BlogPostView from './features/blog/components/BlogPost';
-import BlogEditor from './features/blog/components/BlogEditor';
 import Dashboard from './features/user/components/Dashboard';
 import PublicProfile from './features/user/components/PublicProfile';
 import { AdminDashboard } from './features/admin/components/AdminDashboard';
@@ -23,6 +22,8 @@ import { RestrictedAccess } from './features/user/components/auth/RestrictedAcce
 import { QueryDocumentSnapshot } from 'firebase/firestore';
 import { usePerformanceMonitoring } from './core/scaling/PerformanceMonitor';
 import { cacheStrategy } from './core/scaling/CacheStrategy';
+
+const BlogEditor = lazy(() => import('./features/blog/components/BlogEditor'));
 
 function AppContent() {
   const [view, setView] = useState<View>('list');
@@ -276,13 +277,21 @@ function AppContent() {
         );
       case 'editor':
         return (
-          <BlogEditor 
-            post={editingPost} 
-            onSave={handleSavePost} 
-            onCancel={() => navTo(user ? 'admin' : 'list')}
-            onDelete={handleDeletePost}
-            onNotify={notify}
-          />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center min-h-[50vh]">
+                <div className="w-8 h-8 border-2 border-slate-800 border-t-accent rounded-full animate-spin" />
+              </div>
+            }
+          >
+            <BlogEditor 
+              post={editingPost} 
+              onSave={handleSavePost} 
+              onCancel={() => navTo(user ? 'admin' : 'list')}
+              onDelete={handleDeletePost}
+              onNotify={notify}
+            />
+          </Suspense>
         );
       default:
         return null;

@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, updateDoc, getDoc, setDoc, query, orderBy, limit, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, getDoc, setDoc, query, orderBy, limit, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { UserProfile, BlogPost, AppStats } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
@@ -27,7 +27,6 @@ export const adminService = {
   async toggleUserSuspension(userId: string, currentlySuspended: boolean) {
     console.log(`[adminService] Toggling suspension for: users/${userId} to ${!currentlySuspended}`);
     try {
-      const { serverTimestamp } = await import('firebase/firestore');
       const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
         suspended: !currentlySuspended,

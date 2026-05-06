@@ -14,6 +14,7 @@ import {
   or,
   and,
   increment,
+  writeBatch,
   limit,
   startAfter,
   QueryDocumentSnapshot
@@ -28,7 +29,6 @@ const COLLECTION_NAME = 'posts';
 // Interaction Services
 
 export async function toggleLike(postId: string, userId: string, currentlyLiked: boolean): Promise<void> {
-  const { writeBatch } = await import('firebase/firestore');
   const batch = writeBatch(db);
   const postRef = doc(db, COLLECTION_NAME, postId);
   const likeRef = doc(db, COLLECTION_NAME, postId, 'likes', userId);
