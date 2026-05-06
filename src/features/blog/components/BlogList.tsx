@@ -5,6 +5,7 @@ import { BlogPost } from '../../../types';
 import { format } from 'date-fns';
 import { calculateReadingTime } from '../../../lib/blog-utils';
 import OptimizedImage from '../../../components/ui/OptimizedImage';
+import { BlogCardSkeleton, FeaturedBlogSkeleton } from '../../../components/ui/Skeleton';
 
 interface BlogListProps {
   posts: BlogPost[];
@@ -13,6 +14,7 @@ interface BlogListProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   loadingMore?: boolean;
+  loading?: boolean;
 }
 
 const CATEGORIES = ['All', 'Finance', 'Logistics', 'Commodities', 'Services', 'AI', 'Web Dev', 'Projects'];
@@ -102,7 +104,8 @@ export default function BlogList({
   onViewProfile,
   onLoadMore,
   hasMore,
-  loadingMore
+  loadingMore,
+  loading
 }: BlogListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -132,6 +135,29 @@ export default function BlogList({
   const regularPosts = useMemo(() => {
     return filteredPosts.filter(p => !debouncedSearch && activeCategory === 'All' ? p.id !== featuredPost?.id : true);
   }, [filteredPosts, debouncedSearch, activeCategory, featuredPost]);
+
+  if (loading && posts.length === 0) {
+    return (
+      <div id="blog-listing" className="space-y-6 md:space-y-12">
+        <section className="text-center space-y-2 md:space-y-4 max-w-3xl mx-auto py-2 md:py-8">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-ink uppercase">
+            Global<span className="text-accent underline decoration-accent/10 underline-offset-4 md:underline-offset-6">Trade</span>
+          </h1>
+          <p className="text-sm md:text-lg text-ink-muted font-medium leading-relaxed italic px-4">
+            Constructing intelligence networks...
+          </p>
+        </section>
+
+        <FeaturedBlogSkeleton />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <BlogCardSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div id="blog-listing" className="space-y-6 md:space-y-12">

@@ -26,9 +26,9 @@ export default function OptimizedImage({
           <motion.div 
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-slate-800 animate-pulse flex items-center justify-center z-10"
+            className="absolute inset-0 z-10"
           >
-            <div className="w-10 h-10 border-4 border-slate-700 border-t-accent rounded-full animate-spin" />
+            <div className="w-full h-full bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 bg-[length:200%_100%] animate-[shimmer_1.5s_infinite] relative" />
           </motion.div>
         )}
       </AnimatePresence>

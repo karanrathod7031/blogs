@@ -1,58 +1,87 @@
 import ReactMarkdown from 'react-markdown';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowLeft, 
   Share2, 
   Calendar, 
   Clock, 
-  Share, 
-  Twitter, 
-  Globe, 
-  Facebook, 
-  Link as LinkIcon, 
-  BookOpen, 
   ArrowRight, 
-  Briefcase, 
-  DollarSign, 
-  MapPin, 
   MessageSquare,
-  Heart,
   MessageCircle,
-  Send,
-  User as UserIcon
+  Heart,
+  User as UserIcon,
+  Twitter,
+  Facebook,
+  Link as LinkIcon
 } from 'lucide-react';
 import { BlogPost, UserProfile, Comment } from '../../../types';
 import { format } from 'date-fns';
 import { calculateReadingTime } from '../../../lib/blog-utils';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuthState } from '../../../hooks/useAuthState';
 import { toggleLike, isPostLiked, addComment, getComments } from '../../../services/blogService';
 import OptimizedImage from '../../../components/ui/OptimizedImage';
 
+import { Skeleton } from '../../../components/ui/Skeleton';
+
 interface BlogPostProps {
-  post: BlogPost;
+  post: BlogPost | null;
   onBack: () => void;
   onSelectPost?: (slug: string) => void;
   allPosts?: BlogPost[];
   onNotify: (msg: string, type: 'success' | 'error') => void;
   onViewProfile?: (userId: string) => void;
+  slug?: string;
+  loading?: boolean;
 }
 
-export default function BlogPostView({ post, onBack, onSelectPost, allPosts = [], onNotify, onViewProfile }: BlogPostProps) {
+function PostSkeleton() {
+  return (
+    <div className="space-y-8 animate-pulse">
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-6 w-24 rounded-lg" />
+          <Skeleton className="h-4 w-32 rounded-md" />
+        </div>
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-6 w-3/4 rounded-lg" />
+        <div className="flex items-center gap-3">
+          <Skeleton className="w-10 h-10 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-2 w-24" />
+          </div>
+        </div>
+      </div>
+      <Skeleton className="aspect-video w-full rounded-[2rem]" />
+      <div className="space-y-4 pt-8">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-4/6" />
+      </div>
+    </div>
+  );
+}
+
+export default function BlogPostView({ post, onBack, onSelectPost, allPosts = [], onNotify, onViewProfile, loading: propLoading }: BlogPostProps) {
   const { user } = useAuthState();
   const [copied, setCopied] = useState(false);
   const [authorProfile, setAuthorProfile] = useState<UserProfile | null>(null);
   
   const [liked, setLiked] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
-  const [likeCount, setLikeCount] = useState(post.likeCount || 0);
+  const [likeCount, setLikeCount] = useState(post?.likeCount || 0);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
 
   useEffect(() => {
+    if (!post) return;
+    
     const fetchAuthorProfile = async () => {
       try {
         const docRef = doc(db, 'users', post.authorId);
@@ -71,15 +100,16 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
           isPostLiked(post.id, user.uid).then(setLiked).catch(() => {});
         }
         getComments(post.id).then(setComments).catch(() => {});
-      } catch (err) {
+      } catch {
         // Silently fail for non-critical interactions
       }
     };
 
+    setLikeCount(post.likeCount || 0);
     fetchAuthorProfile();
     fetchInteractions();
     window.scrollTo(0, 0);
-  }, [post.authorId, post.id, user]);
+  }, [post?.authorId, post?.id, user]);
 
   const handleLike = async () => {
     if (!user) {
@@ -94,7 +124,7 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
     
     try {
       await toggleLike(post.id, user.uid, liked);
-    } catch (err) {
+    } catch {
       setLiked(liked);
       setLikeCount(post.likeCount || 0);
       onNotify('Failed to update like', 'error');
@@ -114,7 +144,7 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
       setComments([comment, ...comments]);
       setNewComment('');
       onNotify('Comment added successfully', 'success');
-    } catch (err) {
+    } catch {
       onNotify('Failed to add comment', 'error');
     } finally {
       setSubmittingComment(false);
@@ -131,22 +161,55 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const toc = post.content.match(/^#+\s+.+$/gm)?.map(h => ({
-    text: h.replace(/^#+\s+/, ''),
-    level: h.match(/^#+/)?.[0].length || 1
-  })) || [];
+  const toc = useMemo(() => {
+    if (!post) return [];
+    return post.content.match(/^#+\s+.+$/gm)?.map(h => ({
+      text: h.replace(/^#+\s+/, ''),
+      level: h.match(/^#+/)?.[0].length || 1
+    })) || [];
+  }, [post]);
 
   return (
     <div className="relative">
-      <div className="mb-8">
-        <button 
-          onClick={onBack}
-          className="group flex items-center gap-2 text-xs font-bold text-ink-muted hover:text-accent transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          Back to networking
-        </button>
-      </div>
+      <AnimatePresence mode="wait">
+        {(!post || propLoading) ? (
+          <motion.div
+            key="skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-4xl mx-auto py-8"
+          >
+            <div className="mb-8">
+              <button 
+                onClick={onBack}
+                className="group flex items-center gap-2 text-xs font-bold text-ink-muted hover:text-accent transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                Back to networking
+              </button>
+            </div>
+            <PostSkeleton />
+          </motion.div>
+        ) : (
+          <motion.div
+            key={post.id}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="mb-8">
+              <button 
+                onClick={onBack}
+                className="group flex items-center gap-2 text-xs font-bold text-ink-muted hover:text-accent transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                Back to networking
+              </button>
+            </div>
+
+            {/* Header section... */}
 
       <article id="post-content-view" className="grid lg:grid-cols-[1fr_320px] gap-6 md:gap-12 lg:gap-16">
         <div className="space-y-6 md:space-y-8">
@@ -483,6 +546,9 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
           </div>
         </section>
       )}
+    </motion.div>
+  )}
+</AnimatePresence>
     </div>
   );
 }

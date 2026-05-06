@@ -88,7 +88,7 @@ function AppContent() {
         setPosts(data);
         setHasMore(false);
       }
-    } catch (err) {
+    } catch {
       notify('Failed to fetch synchronization signals', 'error');
     } finally {
       setLoading(false);
@@ -116,20 +116,26 @@ function AppContent() {
       return;
     }
 
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    // Step 1: Immediate Transition for Instagram-like feel
+    setCurrentPost(null);
+    navTo('post');
     setLoading(true);
+
     try {
       const post = await getPostBySlug(slug);
       console.log('[App] Selection RESOLVED:', post ? 'Found' : 'NULL');
       if (post) {
         setCurrentPost(post);
-        navTo('post');
+        // Page title updates for SEO/Feel
+        document.title = `${post.title} | GlobalTrade`;
       } else {
         notify('Terminal not found in Global Archive', 'error');
+        navTo('list');
       }
     } catch (err) {
       console.error('[App] Selection ERROR:', err);
       notify('Connection timeout or protocol violation', 'error');
+      navTo('list');
     } finally {
       setLoading(false);
     }
@@ -151,7 +157,7 @@ function AppContent() {
       }
       navTo('admin');
       fetchPosts();
-    } catch (err) {
+    } catch {
       notify('Sync failure: protocol error', 'error');
     }
   };
@@ -167,7 +173,7 @@ function AppContent() {
       await deletePost(id);
       setPosts(prev => prev.filter(p => p.id !== id));
       notify('Archive entry terminated', 'success');
-    } catch (err) {
+    } catch {
       notify('Termination failure: security override active', 'error');
     } finally {
       setDeletingPostIds(prev => {
@@ -191,14 +197,6 @@ function AppContent() {
   }
 
   const renderContent = () => {
-    if (loading && posts.length === 0) {
-      return (
-        <div className="py-40 flex items-center justify-center">
-          <div className="w-12 h-12 border-2 border-slate-800 border-t-accent rounded-full animate-spin" />
-        </div>
-      );
-    }
-
     switch (view) {
       case 'list':
         return (
@@ -209,19 +207,21 @@ function AppContent() {
             onLoadMore={handleLoadMore}
             hasMore={hasMore}
             loadingMore={loadingMore}
+            loading={loading}
           />
         );
       case 'post':
-        return currentPost ? (
+        return (
           <BlogPostView 
             post={currentPost} 
             onBack={() => navTo(prevView)} 
             onSelectPost={handleSelectPost}
             allPosts={posts} 
             onNotify={notify} 
-            onViewProfile={handleViewProfile} 
+            onViewProfile={handleViewProfile}
+            loading={loading && !currentPost}
           />
-        ) : null;
+        );
       case 'profile':
         return currentProfileId ? (
           <PublicProfile userId={currentProfileId} onBack={() => navTo(prevView)} onViewPost={handleSelectPost} />
@@ -248,7 +248,7 @@ function AppContent() {
           <AdminDashboard onViewPost={handleSelectPost} />
         ) : (
           <div className="text-center py-20">
-             <p className="text-xl font-serif italic text-rose-500">Master Clearance Required.</p>
+            <p className="text-xl font-serif italic text-rose-500">Master Clearance Required.</p>
           </div>
         );
       case 'editor':
@@ -271,6 +271,7 @@ function AppContent() {
       activeView={view} 
       onViewChange={navTo}
       onNew={() => { setEditingPost(undefined); navTo('editor'); }}
+      isLoading={loading}
     >
       {renderContent()}
       

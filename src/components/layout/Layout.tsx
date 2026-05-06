@@ -1,20 +1,22 @@
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogIn, LogOut, FileText, Menu, X, Eye, Plus } from 'lucide-react';
+import { LogIn, LogOut, Menu, X, Plus } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { useAuthState } from '../../hooks/useAuthState';
 import { useNotification } from '../ui/Toast';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { View } from '../../types';
 
 
 interface LayoutProps {
   children: ReactNode;
   activeView: string;
-  onViewChange: (view: any) => void;
+  onViewChange: (view: View) => void;
   onNew?: () => void;
+  isLoading?: boolean;
 }
 
-export default function Layout({ children, activeView, onViewChange, onNew }: LayoutProps) {
+export default function Layout({ children, activeView, onViewChange, onNew, isLoading }: LayoutProps) {
   const { user, profile, loading } = useAuthState();
   const { notify } = useNotification();
   const [scrolled, setScrolled] = useState(false);
@@ -45,7 +47,8 @@ export default function Layout({ children, activeView, onViewChange, onNew }: La
     try {
       await authService.signInWithGoogle();
       notify('Authentication established', 'success');
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const error = err as { code?: string };
       if (
         error.code !== 'auth/popup-closed-by-user' && 
         error.code !== 'auth/cancelled-popup-request'
@@ -63,19 +66,36 @@ export default function Layout({ children, activeView, onViewChange, onNew }: La
       await authService.signOut();
       onViewChange('list');
       notify('Session terminated', 'info');
-    } catch (error) {
+    } catch (err) {
+      console.error('Sign-out error:', err);
       notify('Failed to terminate session', 'error');
     }
   };
 
-
-  const navLinks = [
+  const navLinks: { name: string, view: View }[] = [
     { name: 'Network Hub', view: 'list' },
   ];
 
   return (
     <div className="min-h-screen flex flex-col selection:bg-accent/20 selection:text-accent">
       <div className="cursor-glow" ref={cursorRef} />
+      
+      {/* Instagram style top progress bar */}
+      <AnimatePresence>
+        {isLoading && (
+          <motion.div
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: "70%", opacity: 1 }}
+            exit={{ width: "100%", opacity: 0 }}
+            transition={{ 
+              width: { duration: 2, ease: "easeOut" },
+              opacity: { duration: 0.3 }
+            }}
+            className="fixed top-0 left-0 h-1 bg-accent z-[100] shadow-[0_0_10px_rgba(var(--accent-rgb),0.5)]"
+          />
+        )}
+      </AnimatePresence>
+
       <div className="floating-blob blob-one" />
       <div className="floating-blob blob-two" />
 
