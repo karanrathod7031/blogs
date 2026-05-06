@@ -1,5 +1,5 @@
 import ReactMarkdown from 'react-markdown';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
 import { 
   ArrowLeft, 
   Share2, 
@@ -164,6 +164,11 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  
+  const dragX = useMotionValue(0);
+  const backOpacity = useTransform(dragX, [0, 100], [0, 1], { clamp: true });
+  const backScale = useTransform(dragX, [0, 100], [0.5, 1.2], { clamp: true });
+  const backIconX = useTransform(dragX, [0, 100], [-20, 20], { clamp: true });
 
   useEffect(() => {
     if (!post) return;
@@ -296,11 +301,44 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
         ) : (
           <motion.div
             key={post.id}
+            drag="x"
+            dragConstraints={{ left: 0, right: 300 }}
+            dragElastic={0.1}
+            dragDirectionLock
+            onDrag={(e, info) => {
+              dragX.set(info.offset.x);
+            }}
+            onDragEnd={(e, info) => {
+              if (info.offset.x > 120 || (info.offset.x > 50 && info.velocity.x > 400)) {
+                onBack();
+              }
+              dragX.set(0);
+            }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
-            className="max-w-7xl mx-auto py-8 px-4 md:px-10"
+            className="max-w-7xl mx-auto py-8 px-4 md:px-10 touch-pan-y"
+            style={{ x: dragX }}
           >
+            {/* Swipe Back Indicator */}
+            <motion.div 
+              style={{ 
+                opacity: backOpacity,
+                scale: backScale,
+                x: backIconX,
+                position: 'fixed',
+                left: 0,
+                top: '50%',
+                y: '-50%',
+                zIndex: 100,
+                pointerEvents: 'none'
+              }}
+              className="flex items-center gap-2 px-6 py-4 bg-accent text-slate-900 rounded-r-full shadow-2xl border-2 border-white/20"
+            >
+              <ArrowLeft className="w-6 h-6 stroke-[3]" />
+              <span className="text-xs font-black uppercase tracking-widest">Back</span>
+            </motion.div>
+
             <div className="mb-8">
               <button 
                 onClick={onBack}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
 import { Mail, Calendar, Sparkles, BookOpen, Heart, MessageSquare, ArrowLeft } from 'lucide-react';
 import { BlogPost, UserProfile } from '../../../types';
 import { authService } from '../../../services/authService';
@@ -54,6 +54,11 @@ export default function PublicProfile({ userId, onBack, onViewPost }: PublicProf
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const dragX = useMotionValue(0);
+  const backOpacity = useTransform(dragX, [0, 100], [0, 1], { clamp: true });
+  const backScale = useTransform(dragX, [0, 100], [0.5, 1.2], { clamp: true });
+  const backIconX = useTransform(dragX, [0, 100], [-20, 20], { clamp: true });
+
   useEffect(() => {
     async function loadProfile() {
       setLoading(true);
@@ -100,11 +105,44 @@ export default function PublicProfile({ userId, onBack, onViewPost }: PublicProf
       ) : (
         <motion.div
           key={profile.uid}
+          drag="x"
+          dragConstraints={{ left: 0, right: 300 }}
+          dragElastic={0.1}
+          dragDirectionLock
+          onDrag={(e, info) => {
+            dragX.set(info.offset.x);
+          }}
+          onDragEnd={(e, info) => {
+            if (info.offset.x > 120 || (info.offset.x > 50 && info.velocity.x > 400)) {
+              onBack();
+            }
+            dragX.set(0);
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5 }}
-          className="max-w-7xl mx-auto space-y-8 pb-12"
+          className="max-w-7xl mx-auto space-y-8 pb-12 touch-pan-y"
+          style={{ x: dragX }}
         >
+          {/* Swipe Back Indicator */}
+          <motion.div 
+            style={{ 
+              opacity: backOpacity,
+              scale: backScale,
+              x: backIconX,
+              position: 'fixed',
+              left: 0,
+              top: '50%',
+              y: '-50%',
+              zIndex: 100,
+              pointerEvents: 'none'
+            }}
+            className="flex items-center gap-2 px-6 py-4 bg-accent text-slate-900 rounded-r-full shadow-2xl border-2 border-white/20"
+          >
+            <ArrowLeft className="w-6 h-6 stroke-[3]" />
+            <span className="text-xs font-black uppercase tracking-widest">Back</span>
+          </motion.div>
+
           {/* Navigation */}
       <div className="flex items-center justify-between">
         <button 
