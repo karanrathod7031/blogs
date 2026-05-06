@@ -300,13 +300,14 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
               <h4 className="text-xs font-bold text-ink-muted uppercase tracking-widest">Connect</h4>
               <nav className="flex flex-col gap-3 text-sm font-semibold text-ink-muted">
                 <a href="#" className="w-fit hover:text-accent transition-colors">Twitter / X</a>
-                <a href="#" className="w-fit hover:text-accent transition-colors">LinkedIn</a>
+                <a href="https://www.instagram.com/kar.anrathod7031" className="w-fit hover:text-accent transition-colors">Instagram</a>
+                <a href="https://www.linkedin.com/in/karanrathod2027" className="w-fit hover:text-accent transition-colors">LinkedIn</a>
               </nav>
             </div>
           </div>
           
           <div className="mt-16 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-bold text-ink-muted uppercase tracking-wider">
-            <p>© 2026 Blogs Platform. All rights reserved.</p>
+            <p>© 2026 Blogs Platform. All rights reserved. Powerd By Karan Rathod</p>
           </div>
         </div>
       </footer>
