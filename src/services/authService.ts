@@ -58,6 +58,7 @@ export const authService = {
           photoURL: user.photoURL || '',
           role: user.email === 'rk.upk2345678@gmail.com' ? 'admin' : 'user',
           createdAt: serverTimestamp() as any,
+          updatedAt: serverTimestamp() as any,
           bio: '',
           suspended: false
         };

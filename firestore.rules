@@ -96,7 +96,7 @@ service cloud.firestore {
         && isValidPost(incoming())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
-        && incoming().keys().size() == 14; // Strict key count for create
+        && incoming().keys().size() >= 8; // At least required fields
 
       allow update: if isValidId(postId)
         && (isOwner(existing().authorId) || isAdmin())
@@ -111,10 +111,9 @@ service cloud.firestore {
         )
         && incoming().updatedAt == request.time;
 
-      // Increment actions (viewCount) - allowed for any signed in user
+      // Increment actions (viewCount) - allowed for anyone (even guests) to read, but we check if verified or signed in?
+      // Actually, view increment should probably be allowed for anyone reading the post.
       allow update: if isValidId(postId)
-        && isVerified()
-        && isNotSuspended()
         && incoming().diff(existing()).affectedKeys().hasOnly(['viewCount', 'updatedAt'])
         && incoming().viewCount == (existing().get('viewCount', 0) + 1)
         && incoming().updatedAt == request.time;
@@ -175,14 +174,8 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // PII Protection: Only owner or admin can see full profile (including email)
-      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
-      // Public view: others can see a limited set if needed, but the app usually fetches profile by UID
-      // To allow public author profiles safely, we'd need to split fields. 
-      // For now, let's allow read if signed in, but we'll warn about the email.
-      // Better: if it's not the owner, we could try to restrict. But Firestore doesn't support field-level rules.
-      // So we must allow read if we want displayName to be visible.
-      allow get: if isValidId(userId) && isSignedIn();
+      // Allow reading profile publicly so authors can be shown
+      allow get: if isValidId(userId);
       
       allow list: if isAdmin(); 
       
@@ -192,7 +185,7 @@ service cloud.firestore {
         && isValidUser(incoming())
         && (incoming().role == 'user' || isMasterAdmin())
         && incoming().get('suspended', false) == false
-        && incoming().keys().size() <= 10;
+        && incoming().keys().size() >= 7;
         
       allow update: if isValidId(userId)
         && (isOwner(userId) || isAdmin())

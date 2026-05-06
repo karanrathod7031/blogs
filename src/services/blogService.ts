@@ -214,7 +214,8 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
       if (postData.published) {
         const postRef = doc(db, COLLECTION_NAME, docSnap.id);
         updateDoc(postRef, {
-          viewCount: increment(1)
+          viewCount: increment(1),
+          updatedAt: serverTimestamp()
         }).catch(e => console.warn('Failed to increment view count', e));
       }
 
