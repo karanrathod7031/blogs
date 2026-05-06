@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mail, Calendar, Sparkles, MapPin, Link as LinkIcon, BookOpen, Heart, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Mail, Calendar, Sparkles, BookOpen, Heart, MessageSquare, ArrowLeft } from 'lucide-react';
 import { BlogPost, UserProfile } from '../../../types';
 import { authService } from '../../../services/authService';
 import { getPublishedPostsForUser } from '../../../services/blogService';

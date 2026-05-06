@@ -39,30 +39,116 @@ interface BlogPostProps {
 
 function PostSkeleton() {
   return (
-    <div className="space-y-8 animate-pulse">
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-6 w-24 rounded-lg" />
-          <Skeleton className="h-4 w-32 rounded-md" />
-        </div>
-        <Skeleton className="h-12 w-full rounded-xl" />
-        <Skeleton className="h-6 w-3/4 rounded-lg" />
-        <div className="flex items-center gap-3">
-          <Skeleton className="w-10 h-10 rounded-full" />
+    <div className="grid lg:grid-cols-[1fr_320px] gap-6 md:gap-12 lg:gap-16 opacity-60">
+      <div className="space-y-8">
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-6 w-24 rounded-lg" />
+            <div className="h-4 w-px bg-border/50" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-3 w-3 rounded-full" />
+              <Skeleton className="h-3 w-32 rounded-sm" />
+            </div>
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-14 w-full rounded-2xl" />
+            <Skeleton className="h-14 w-3/4 rounded-2xl" />
+          </div>
           <div className="space-y-2">
-            <Skeleton className="h-3 w-32" />
-            <Skeleton className="h-2 w-24" />
+            <Skeleton className="h-5 w-full rounded-md" />
+            <Skeleton className="h-5 w-2/3 rounded-md" />
+          </div>
+          <div className="flex items-center gap-4 pt-4">
+            <Skeleton className="w-12 h-12 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32 rounded-sm" />
+              <Skeleton className="h-3 w-24 rounded-sm" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="relative">
+          <Skeleton className="aspect-video w-full rounded-[3rem]" />
+          <div className="absolute inset-x-8 -bottom-6 flex gap-3">
+            <Skeleton className="h-12 w-24 rounded-2xl" />
+            <Skeleton className="h-12 w-24 rounded-2xl" />
+          </div>
+        </div>
+        
+        <div className="space-y-6 pt-12">
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-full rounded-md" />
+            <Skeleton className="h-5 w-full rounded-md" />
+            <Skeleton className="h-5 w-5/6 rounded-md" />
+          </div>
+          <div className="aspect-[21/9] w-full bg-bg-soft/30 rounded-[2rem] border border-border/20 flex flex-col items-center justify-center gap-4">
+            <Skeleton className="h-4 w-1/3 rounded-sm" />
+            <Skeleton className="h-10 w-1/2 rounded-xl" />
+          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-full rounded-md" />
+            <Skeleton className="h-5 w-11/12 rounded-md" />
+            <Skeleton className="h-5 w-full rounded-md" />
+            <Skeleton className="h-5 w-4/6 rounded-md" />
           </div>
         </div>
       </div>
-      <Skeleton className="aspect-video w-full rounded-[2rem]" />
-      <div className="space-y-4 pt-8">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-4/6" />
-      </div>
+
+      <aside className="hidden lg:block space-y-12">
+        <div className="space-y-6">
+          <Skeleton className="h-4 w-32 rounded-sm opacity-40" />
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-1 w-1 rounded-full" />
+                <Skeleton className={`h-4 rounded-sm ${i === 1 ? 'w-full' : i === 2 ? 'w-5/6' : 'w-4/6'}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <Skeleton className="h-4 w-32 rounded-sm opacity-40" />
+          <div className="flex gap-3">
+            <Skeleton className="h-12 w-12 rounded-2xl" />
+            <Skeleton className="h-12 w-12 rounded-2xl" />
+            <Skeleton className="h-12 w-12 rounded-2xl" />
+          </div>
+        </div>
+
+        <div className="p-10 bg-card rounded-[3rem] border border-border/50 space-y-5 shadow-clean-sm">
+          <Skeleton className="h-4 w-28 rounded-sm text-accent" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full rounded-sm" />
+            <Skeleton className="h-3 w-full rounded-sm" />
+            <Skeleton className="h-3 w-4/5 rounded-sm" />
+            <Skeleton className="h-3 w-full rounded-sm opacity-50" />
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function RelatedPostSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-10">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="p-5 rounded-[2.5rem] bg-card/50 border-2 border-border/30 space-y-5">
+          <Skeleton className="aspect-[16/10] w-full rounded-[1.5rem]" />
+          <div className="space-y-3 px-1">
+            <Skeleton className="h-5 w-20 rounded-lg" />
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-full rounded-md" />
+              <Skeleton className="h-7 w-2/3 rounded-md" />
+              <div className="pt-2">
+                <Skeleton className="h-3 w-full rounded-sm" />
+                <Skeleton className="h-3 w-4/5 rounded-sm mt-1" />
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -151,9 +237,12 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
     }
   };
 
-  const relatedPosts = allPosts
-    .filter(p => p.id !== post.id && (p.category === post.category || p.tags.some(t => post.tags.includes(t))))
-    .slice(0, 3);
+  const relatedPosts = useMemo(() => {
+    if (!post) return [];
+    return allPosts
+      .filter(p => p.id !== post.id && (p.category === post.category || p.tags.some(t => post.tags.includes(t))))
+      .slice(0, 3);
+  }, [post, allPosts]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -175,11 +264,11 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
         {(!post || propLoading) ? (
           <motion.div
             key="skeleton"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="max-w-4xl mx-auto py-8"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="max-w-7xl mx-auto py-8 px-4 md:px-10"
           >
             <div className="mb-8">
               <button 
@@ -191,13 +280,26 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
               </button>
             </div>
             <PostSkeleton />
+            
+            <section className="bg-bg-soft/20 border-t border-border/30 mt-16 md:mt-24 py-12 md:py-24 -mx-4 md:-mx-10 px-4 md:px-10">
+              <div className="max-w-7xl mx-auto space-y-16">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 opacity-40">
+                  <div className="space-y-4">
+                    <Skeleton className="h-10 w-64 rounded-xl" />
+                    <Skeleton className="h-5 w-96 rounded-md" />
+                  </div>
+                </div>
+                <RelatedPostSkeleton />
+              </div>
+            </section>
           </motion.div>
         ) : (
           <motion.div
             key={post.id}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="max-w-7xl mx-auto py-8 px-4 md:px-10"
           >
             <div className="mb-8">
               <button 
@@ -403,7 +505,7 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
             )}
 
             <div className="space-y-6 pt-4">
-              {comments.map((comment, idx) => (
+              {comments.map((comment) => (
                 <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -493,59 +595,73 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
         </aside>
       </article>
 
-      {relatedPosts.length > 0 && (
-        <section className="bg-bg-soft/50 border-t border-border mt-16 md:mt-24 py-12 md:py-24 -mx-4 md:-mx-10 px-4 md:px-10">
-          <div className="max-w-7xl mx-auto space-y-16">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6">
-              <div className="space-y-4">
-                <h2 className="text-2xl md:text-4xl font-black tracking-tight text-ink">Network Proximities</h2>
-                <p className="text-ink-muted font-medium text-sm md:text-lg leading-relaxed max-w-xl">Further dispatches related to the current inquiry within the architecture.</p>
-              </div>
-              <button 
-                onClick={onBack} 
-                className="flex items-center gap-3 px-8 py-4 bg-card border border-border rounded-2xl text-xs font-black uppercase tracking-[0.1em] text-accent hover:shadow-lg transition-all"
-              >
-                Expand feed <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-10">
-              {relatedPosts.map(p => (
-                <article 
-                  key={p.id} 
-                  className="group cursor-pointer p-5 rounded-[2.5rem] bg-card border-2 border-border shadow-sm transition-all hover:shadow-xl hover:-translate-y-2" 
-                  onClick={() => { 
-                    if (onSelectPost) {
-                      onSelectPost(p.slug);
-                    } else {
-                      onBack();
-                    }
-                  }}
+      <AnimatePresence mode="wait">
+        {relatedPosts.length > 0 && (
+          <motion.section 
+            key={post.id + '-related'}
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+            className="bg-bg-soft/50 border-t border-border mt-16 md:mt-24 py-12 md:py-24 -mx-4 md:-mx-10 px-4 md:px-10"
+          >
+            <div className="max-w-7xl mx-auto space-y-16">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6">
+                <div className="space-y-4">
+                  <h2 className="text-2xl md:text-4xl font-black tracking-tight text-ink">Network Proximities</h2>
+                  <p className="text-ink-muted font-medium text-sm md:text-lg leading-relaxed max-w-xl">Further dispatches related to the current inquiry within the architecture.</p>
+                </div>
+                <button 
+                  onClick={onBack} 
+                  className="flex items-center gap-3 px-8 py-4 bg-card border border-border rounded-2xl text-xs font-black uppercase tracking-[0.1em] text-accent hover:shadow-lg transition-all shadow-clean-sm"
                 >
-                  <div className="rounded-[1.5rem] overflow-hidden mb-5">
-                    <OptimizedImage 
-                      src={p.coverImage || `https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&q=80&w=800`} 
-                      alt={p.title} 
-                      className="w-full h-full transition-transform duration-700 group-hover:scale-110" 
-                      aspectRatio="aspect-[16/10]"
-                    />
-                  </div>
-                  <div className="space-y-3 px-1">
-                    <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${p.type === 'trade' ? 'bg-amber-400/10 text-amber-500' : 'badge-primary'}`}>
-                      {p.type === 'trade' ? 'Trade' : (p.category || 'Opinion')}
-                    </span>
-                    <div className="space-y-2">
-                      <h3 className="font-black text-xl leading-tight group-hover:text-accent transition-colors line-clamp-2 text-ink">{p.title}</h3>
-                      <p className="text-xs text-ink-muted leading-relaxed line-clamp-2 min-h-[2.5rem] italic">
-                        {p.excerpt || (p.content.replace(/[#*`]/g, '').slice(0, 80) + '...')}
-                      </p>
+                  Expand feed <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-10">
+                {relatedPosts.map((p, i) => (
+                  <motion.article 
+                    key={p.id} 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5, delay: i * 0.1 }}
+                    className="group cursor-pointer p-5 rounded-[2.5rem] bg-card border-2 border-border shadow-sm transition-all hover:shadow-2xl hover:-translate-y-3 hover:border-accent/30" 
+                    onClick={() => { 
+                      if (onSelectPost) {
+                        onSelectPost(p.slug);
+                      } else {
+                        onBack();
+                      }
+                    }}
+                  >
+                    <div className="rounded-[1.5rem] overflow-hidden mb-5 aspect-[16/10] relative">
+                      <div className="absolute inset-0 bg-accent/10 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
+                      <OptimizedImage 
+                        src={p.coverImage || `https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&q=80&w=800`} 
+                        alt={p.title} 
+                        className="w-full h-full transition-transform duration-700 group-hover:scale-110" 
+                        aspectRatio="aspect-[16/10]"
+                      />
                     </div>
-                  </div>
-                </article>
-              ))}
+                    <div className="space-y-3 px-1">
+                      <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${p.type === 'trade' ? 'bg-amber-400/10 text-amber-500' : 'badge-primary'}`}>
+                        {p.type === 'trade' ? 'Trade' : (p.category || 'Opinion')}
+                      </span>
+                      <div className="space-y-2">
+                        <h3 className="font-black text-xl leading-tight group-hover:text-accent transition-colors line-clamp-2 text-ink">{p.title}</h3>
+                        <p className="text-xs text-ink-muted leading-relaxed line-clamp-2 min-h-[2.5rem] italic opacity-70">
+                          {p.excerpt || (p.content.replace(/[#*`]/g, '').slice(0, 80) + '...')}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.article>
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
-      )}
+          </motion.section>
+        )}
+      </AnimatePresence>
     </motion.div>
   )}
 </AnimatePresence>
