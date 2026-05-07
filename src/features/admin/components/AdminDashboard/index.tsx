@@ -27,7 +27,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) => {
-  const { user } = useAuthState();
+  const { user, profile, loading: authLoading } = useAuthState();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<AppStats | null>(null);
@@ -42,26 +42,64 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   const [confirmDeletePayload, setConfirmDeletePayload] = useState<string | null>(null);
   const [confirmDeleteUserPayload, setConfirmDeleteUserPayload] = useState<string | null>(null);
 
+  const isAdmin = profile?.role === 'admin' || user?.email === 'rk.upk2345678@gmail.com';
+
+  const buildFallbackStats = (allUsers: UserProfile[], allPosts: BlogPost[], existingStats?: AppStats | null): AppStats => {
+    const totalViews = allPosts.reduce((sum, post) => sum + (post.viewCount || 0), 0);
+    const totalLikes = allPosts.reduce((sum, post) => sum + (post.likeCount || 0), 0);
+
+    return {
+      totalUsers: allUsers.length,
+      totalPosts: allPosts.length,
+      totalViews,
+      totalLikes,
+      totalComments: existingStats?.totalComments || 0,
+      totalInteractions: existingStats?.totalInteractions || 0,
+      todayActiveUsers: existingStats?.todayActiveUsers || 0,
+      currentActiveUsers: existingStats?.currentActiveUsers || 0
+    };
+  };
+
   const fetchData = async (silent = false) => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!user || !isAdmin) {
+      setLoading(false);
+      return;
+    }
+
     if (!silent) setLoading(true);
     try {
-      const dbStats = await adminService.getAppStats();
-      const allUsers = await adminService.getAllUsers();
-      const allPosts = await adminService.getAllPosts();
-      
-      setStats(dbStats);
+      const [statsResult, usersResult, postsResult] = await Promise.allSettled([
+        adminService.getAppStats(),
+        adminService.getAllUsers(),
+        adminService.getAllPosts()
+      ]);
+
+      const dbStats = statsResult.status === 'fulfilled' ? statsResult.value : null;
+      const allUsers = usersResult.status === 'fulfilled' ? usersResult.value : [];
+      const allPosts = postsResult.status === 'fulfilled' ? postsResult.value : [];
+
+      setStats(buildFallbackStats(allUsers, allPosts, dbStats));
       setUsers(allUsers);
       setPosts(allPosts);
+
+      if (statsResult.status === 'rejected' || usersResult.status === 'rejected' || postsResult.status === 'rejected') {
+        notify('Some admin data could not be synchronized. Showing the latest available results.', 'info');
+      }
     } catch (error) {
       console.error('Failed to fetch admin data:', error);
+      notify('Admin dashboard synchronization failed', 'error');
     } finally {
       if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    void fetchData();
+  }, [authLoading, user?.uid, profile?.role]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -72,12 +110,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   }, []);
 
   const handleRefreshStats = async () => {
+    if (!user || !isAdmin) return;
+
     setRefreshing(true);
     try {
       const newStats = await adminService.refreshStats();
       setStats(newStats);
+      await fetchData(true);
     } catch (error) {
       console.error('Failed to refresh stats:', error);
+      notify('Stats refresh failed', 'error');
     } finally {
       setRefreshing(false);
     }
