@@ -83,7 +83,8 @@ export const adminService = {
         totalViews: 0,
         totalUsers: 0,
         totalLikes: 0,
-        totalComments: 0
+        totalComments: 0,
+        totalInteractions: 0
       };
       return initialStats;
     } catch (error) {
@@ -93,8 +94,10 @@ export const adminService = {
 
   async refreshStats() {
     try {
+      const statsRef = doc(db, 'system', 'stats');
       const usersSnap = await getDocs(collection(db, 'users'));
       const postsSnap = await getDocs(collection(db, 'posts'));
+      const existingStatsSnap = await getDoc(statsRef);
       
       let totalViews = 0;
       let totalLikes = 0;
@@ -110,10 +113,13 @@ export const adminService = {
         totalPosts: postsSnap.size,
         totalComments: 0, // Simplified or separate fetch
         totalViews,
-        totalLikes
+        totalLikes,
+        totalInteractions: existingStatsSnap.exists()
+          ? (existingStatsSnap.data().totalInteractions as number | undefined) || 0
+          : 0
       };
 
-      await setDoc(doc(db, 'system', 'stats'), stats);
+      await setDoc(statsRef, stats);
       return stats;
     } catch (error) {
       console.error('[AdminService] refreshStats failed:', error);

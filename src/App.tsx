@@ -22,6 +22,7 @@ import { RestrictedAccess } from './features/user/components/auth/RestrictedAcce
 import { QueryDocumentSnapshot } from 'firebase/firestore';
 import { usePerformanceMonitoring } from './core/scaling/PerformanceMonitor';
 import { cacheStrategy } from './core/scaling/CacheStrategy';
+import { initializeInteractionTracking, trackInteraction } from './services/interactionService';
 
 const BlogEditor = lazy(() => import('./features/blog/components/BlogEditor'));
 
@@ -59,6 +60,22 @@ function AppContent() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   usePerformanceMonitoring('AppMainFeed');
+
+  useEffect(() => {
+    const cleanup = initializeInteractionTracking();
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (!event.isTrusted) return;
+      trackInteraction();
+    };
+
+    document.addEventListener('click', handleDocumentClick, { passive: true });
+
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+      cleanup();
+    };
+  }, []);
 
   const navTo = useCallback((newView: View) => {
     window.scrollTo({ top: 0, behavior: 'auto' });

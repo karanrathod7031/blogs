@@ -54,6 +54,7 @@ export interface AppStats {
   totalUsers: number;
   totalLikes: number;
   totalComments: number;
+  totalInteractions: number;
 }
 
 export interface PostView {

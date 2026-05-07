@@ -8,6 +8,7 @@ import {
   RefreshCcw,
   Search,
   Activity,
+  MousePointerClick,
 } from 'lucide-react';
 import { adminService } from '../../../../services/adminService';
 import { UserProfile, BlogPost, AppStats } from '../../../../types';
@@ -235,11 +236,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
           className="space-y-8"
         >
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <StatCard icon={<Users className="w-5 h-5" />} label="Total Nodes" value={stats?.totalUsers || 0} trend="+3.2%" color="bg-blue-50 text-blue-600" />
             <StatCard icon={<FileText className="w-5 h-5" />} label="Total Dispatches" value={stats?.totalPosts || 0} trend="+5.1%" color="bg-emerald-50 text-emerald-600" />
             <StatCard icon={<Eye className="w-5 h-5" />} label="Network Reach" value={stats?.totalViews || 0} trend="+12.4%" color="bg-amber-50 text-amber-600" />
             <StatCard icon={<Activity className="w-5 h-5" />} label="Engagement" value={(stats?.totalLikes || 0) + (stats?.totalComments || 0)} trend="+8.2%" color="bg-rose-50 text-rose-600" />
+            <StatCard icon={<MousePointerClick className="w-5 h-5" />} label="Total Clicks" value={stats?.totalInteractions || 0} trend="Live" color="bg-cyan-50 text-cyan-600" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
