@@ -23,6 +23,7 @@ import { useNotification } from '../../../../components/ui/Toast';
 import { ConfirmationModal } from '../../../../components/ui/ConfirmationModal';
 import { AnonymousActivityCard } from './AnonymousActivityCard';
 import { ActiveUserRecordsCard } from './ActiveUserRecordsCard';
+import { UserActivityLogChart } from './UserActivityLogChart';
 
 interface AdminDashboardProps {
   onViewPost: (slug: string) => void;
@@ -439,7 +440,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
             <StatCard icon={<Radio className="w-5 h-5" />} label="Currently Active" value={overviewStats.currentActiveUsers ?? null} trend="5 min" color="bg-lime-50 text-lime-600" status={usersState.status === 'error' ? 'error' : 'ready'} />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 items-start">
             <SystemPulse stats={overviewStats} />
 
             <div className="space-y-6">
@@ -449,6 +450,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
                 recentSessions={anonymousState.data?.recentSessions ?? 0}
                 status={anonymousState.status === 'error' ? 'error' : anonymousState.status === 'loading' ? 'loading' : 'ready'}
               />
+              <UserActivityLogChart records={signedInActivity.records} />
               <ActiveUserRecordsCard records={signedInActivity.records} />
               <SecurityStatusCard status={{
                 users: usersState.status,

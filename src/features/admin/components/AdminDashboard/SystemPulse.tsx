@@ -41,31 +41,47 @@ export const SystemPulse: React.FC<SystemPulseProps> = ({ stats }) => {
         </h3>
         <span className="text-[10px] font-black uppercase text-ink-muted tracking-widest">Real-time Telemetry</span>
       </div>
-      <div className="h-[300px] min-w-0">
+      <div className="min-w-0">
         {telemetryData.length > 0 ? (
-          <div className="grid h-full grid-cols-8 gap-3 items-end border-t border-b border-border/60 py-6">
-            {telemetryData.map((entry) => (
-              <div key={entry.label} className="flex h-full min-w-0 flex-col justify-end gap-3">
-                <div className="flex-1 flex items-end justify-center">
-                  <div
-                    className="w-full max-w-[56px] rounded-t-[18px] transition-all duration-300"
-                    style={{
-                      height: `${Math.max((entry.value / maxValue) * 100, 8)}%`,
-                      backgroundColor: entry.color,
-                      opacity: 0.88
-                    }}
-                    title={`${entry.label}: ${formatMetric(entry.value)}`}
-                  />
+          <div className="space-y-5">
+            <div className="grid h-[208px] grid-cols-8 gap-3 items-end border-t border-border/60 pt-6">
+              {telemetryData.map((entry) => (
+                <div key={entry.label} className="flex h-full min-w-0 flex-col justify-end gap-3">
+                  <div className="flex-1 flex items-end justify-center">
+                    <div
+                      className="w-full max-w-[52px] min-h-[10px] rounded-t-[18px] transition-all duration-300"
+                      style={{
+                        height: `${Math.max((entry.value / maxValue) * 100, 8)}%`,
+                        backgroundColor: entry.color,
+                        opacity: 0.9
+                      }}
+                      title={`${entry.label}: ${formatMetric(entry.value)}`}
+                    />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-ink-muted">{entry.label}</p>
+                    <p className="text-xs font-bold text-ink">{formatMetric(entry.value)}</p>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-ink-muted">{entry.label}</p>
-                  <p className="text-xs font-bold text-ink">{formatMetric(entry.value)}</p>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 border-t border-border/60 pt-4">
+              {telemetryData.slice(0, 4).map((entry) => (
+                <div key={`${entry.label}-summary`} className="rounded-2xl border border-border bg-bg-soft px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-ink-muted">{entry.label}</p>
+                  </div>
+                  <p className="mt-2 text-lg font-black text-ink">{formatMetric(entry.value)}</p>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         ) : (
-          <div className="h-full flex items-center justify-center text-center text-ink-muted">
+          <div className="h-[208px] flex items-center justify-center text-center text-ink-muted border-t border-border/60 pt-6">
             <div>
               <p className="text-xs font-black uppercase tracking-widest">Telemetry unavailable</p>
               <p className="mt-2 text-sm font-medium">Live metrics will appear as soon as at least one data source responds.</p>
