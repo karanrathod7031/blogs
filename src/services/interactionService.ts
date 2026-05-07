@@ -1,4 +1,4 @@
-import { doc, increment, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, increment, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 
 const STATS_DOC_REF = doc(db, 'system', 'stats');
@@ -57,7 +57,9 @@ async function updatePresence() {
       { merge: true }
     );
   } catch (error) {
-    console.error('[InteractionTracker] Failed to update presence', error);
+    if (import.meta.env.DEV) {
+      console.error('[InteractionTracker] Failed to update presence', error);
+    }
   }
 
   if (!activeUserId) {
@@ -68,33 +70,25 @@ async function updatePresence() {
   const currentUser = auth.currentUser;
 
   try {
-    await updateDoc(
+    await setDoc(
       userRef,
       {
+        uid: activeUserId,
+        displayName: currentUser?.displayName || 'Anonymous User',
+        email: currentUser?.email || '',
+        photoURL: currentUser?.photoURL || '',
+        role: currentUser?.email === ROOT_ADMIN_EMAIL ? 'admin' : 'user',
+        bio: '',
+        suspended: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
         lastSeenAt: now,
-        lastActiveDayKey: dayKey,
-        updatedAt: serverTimestamp()
-      }
+        lastActiveDayKey: dayKey
+      },
+      { merge: true }
     );
-  } catch {
-    try {
-      await setDoc(
-        userRef,
-        {
-          uid: activeUserId,
-          displayName: currentUser?.displayName || 'Anonymous User',
-          email: currentUser?.email || '',
-          photoURL: currentUser?.photoURL || '',
-          role: currentUser?.email === ROOT_ADMIN_EMAIL ? 'admin' : 'user',
-          suspended: false,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          lastSeenAt: now,
-          lastActiveDayKey: dayKey
-        },
-        { merge: true }
-      );
-    } catch (error) {
+  } catch (error) {
+    if (import.meta.env.DEV) {
       console.error('[InteractionTracker] Failed to update user activity', error);
     }
   }

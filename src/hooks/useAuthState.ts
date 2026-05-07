@@ -39,7 +39,10 @@ export function useAuthState() {
               website: '',
               role: authUser.email === 'rk.upk2345678@gmail.com' ? 'admin' : 'user',
               suspended: false,
-              createdAt: serverTimestamp()
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              lastSeenAt: Date.now(),
+              lastActiveDayKey: new Date().toISOString().slice(0, 10)
             };
             
             // Auto-create profile in Firestore

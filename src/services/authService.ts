@@ -60,9 +60,22 @@ export const authService = {
           createdAt: serverTimestamp() as any,
           updatedAt: serverTimestamp() as any,
           bio: '',
-          suspended: false
+          suspended: false,
+          lastSeenAt: Date.now(),
+          lastActiveDayKey: new Date().toISOString().slice(0, 10)
         };
         await setDoc(userRef, newUser);
+      } else {
+        await setDoc(userRef, {
+          uid: user.uid,
+          displayName: user.displayName || 'Anonymous User',
+          email: user.email || '',
+          photoURL: user.photoURL || '',
+          role: user.email === 'rk.upk2345678@gmail.com' ? 'admin' : 'user',
+          updatedAt: serverTimestamp() as any,
+          lastSeenAt: Date.now(),
+          lastActiveDayKey: new Date().toISOString().slice(0, 10)
+        }, { merge: true });
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);

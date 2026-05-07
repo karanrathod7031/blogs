@@ -84,8 +84,12 @@ export const adminService = {
         currentActive: anonymousSessions.filter(entry => typeof entry.lastSeenAt === 'number' && entry.lastSeenAt >= activeThreshold).length,
         recentSessions: anonymousSessions.length
       };
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, PRESENCE_COLLECTION_NAME);
+    } catch {
+      return {
+        todayActive: 0,
+        currentActive: 0,
+        recentSessions: 0
+      };
     }
   },
 

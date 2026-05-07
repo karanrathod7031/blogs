@@ -34,14 +34,14 @@ export const SystemPulse: React.FC<SystemPulseProps> = ({ stats }) => {
   const telemetryData = buildTelemetryData(stats);
 
   return (
-    <div className="premium-card p-8 bg-card border border-border shadow-xl">
+    <div className="premium-card p-8 bg-card border border-border shadow-xl min-w-0">
       <div className="flex items-center justify-between mb-8">
         <h3 className="text-lg font-black text-ink flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-accent" /> System Pulse
         </h3>
         <span className="text-[10px] font-black uppercase text-ink-muted tracking-widest">Real-time Telemetry</span>
       </div>
-      <div className="h-[300px]">
+      <div className="h-[300px] min-w-0">
         {telemetryData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={telemetryData} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
