@@ -24,20 +24,29 @@ function getTodayKey(date = new Date()): string {
 }
 
 async function getPresenceStats() {
-  const todayPresenceSnap = await getDocs(
-    query(collection(db, PRESENCE_COLLECTION_NAME), where('dayKey', '==', getTodayKey()))
-  );
-  const currentPresenceSnap = await getDocs(
-    query(
-      collection(db, PRESENCE_COLLECTION_NAME),
-      where('lastSeenAt', '>=', Date.now() - ACTIVE_USER_WINDOW_MS)
-    )
-  );
+  try {
+    const [todayPresenceResult, currentPresenceResult] = await Promise.allSettled([
+      getDocs(
+        query(collection(db, PRESENCE_COLLECTION_NAME), where('dayKey', '==', getTodayKey()))
+      ),
+      getDocs(
+        query(
+          collection(db, PRESENCE_COLLECTION_NAME),
+          where('lastSeenAt', '>=', Date.now() - ACTIVE_USER_WINDOW_MS)
+        )
+      )
+    ]);
 
-  return {
-    todayActiveUsers: todayPresenceSnap.size,
-    currentActiveUsers: currentPresenceSnap.size
-  };
+    return {
+      todayActiveUsers: todayPresenceResult.status === 'fulfilled' ? todayPresenceResult.value.size : 0,
+      currentActiveUsers: currentPresenceResult.status === 'fulfilled' ? currentPresenceResult.value.size : 0
+    };
+  } catch {
+    return {
+      todayActiveUsers: 0,
+      currentActiveUsers: 0
+    };
+  }
 }
 
 export const adminService = {
@@ -109,19 +118,33 @@ export const adminService = {
 
   async getAppStats(): Promise<AppStats> {
     try {
-      const presenceStats = await getPresenceStats();
-      const statsDoc = await getDoc(doc(db, 'system', 'stats'));
-      if (statsDoc.exists()) {
+      const [presenceStats, statsDocResult] = await Promise.allSettled([
+        getPresenceStats(),
+        getDoc(doc(db, 'system', 'stats'))
+      ]);
+
+      const safePresenceStats = presenceStats.status === 'fulfilled'
+        ? presenceStats.value
+        : { todayActiveUsers: 0, currentActiveUsers: 0 };
+
+      if (statsDocResult.status === 'fulfilled' && statsDocResult.value.exists()) {
         return {
           ...createEmptyStats(),
-          ...(statsDoc.data() as Partial<AppStats>),
-          ...presenceStats
+          ...(statsDocResult.value.data() as Partial<AppStats>),
+          ...safePresenceStats
         };
       }
-      
+
+      if (statsDocResult.status === 'fulfilled') {
+        return {
+          ...createEmptyStats(),
+          ...safePresenceStats
+        };
+      }
+
       return {
         ...createEmptyStats(),
-        ...presenceStats
+        ...safePresenceStats
       };
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'system/stats');
@@ -131,10 +154,12 @@ export const adminService = {
   async refreshStats() {
     try {
       const statsRef = doc(db, 'system', 'stats');
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const postsSnap = await getDocs(collection(db, 'posts'));
-      const existingStatsSnap = await getDoc(statsRef);
-      const presenceStats = await getPresenceStats();
+      const [usersSnap, postsSnap, existingStatsResult, presenceStats] = await Promise.all([
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'posts')),
+        getDoc(statsRef).catch(() => null),
+        getPresenceStats()
+      ]);
       
       let totalViews = 0;
       let totalLikes = 0;
@@ -151,8 +176,8 @@ export const adminService = {
         totalComments: 0, // Simplified or separate fetch
         totalViews,
         totalLikes,
-        totalInteractions: existingStatsSnap.exists()
-          ? (existingStatsSnap.data().totalInteractions as number | undefined) || 0
+        totalInteractions: existingStatsResult?.exists()
+          ? (existingStatsResult.data().totalInteractions as number | undefined) || 0
           : 0,
         todayActiveUsers: presenceStats.todayActiveUsers,
         currentActiveUsers: presenceStats.currentActiveUsers
