@@ -247,7 +247,7 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
         )}
       </AnimatePresence>
 
-      <main className="flex-grow pt-20 md:pt-32 pb-12 md:pb-24">
+      <main className="flex-grow pt-28 md:pt-36 pb-12 md:pb-24">
         <div className="max-w-7xl mx-auto px-4 md:px-10">
           <AnimatePresence mode="wait">
             <motion.div

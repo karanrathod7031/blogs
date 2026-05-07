@@ -257,7 +257,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
-            <SystemPulse />
+            <SystemPulse stats={stats} />
 
             <div className="space-y-6">
               <SecurityStatusCard />
