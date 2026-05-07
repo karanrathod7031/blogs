@@ -3,6 +3,7 @@ import { db } from '../lib/firebase';
 
 const STATS_DOC_REF = doc(db, 'system', 'stats');
 const PRESENCE_COLLECTION_NAME = 'presence';
+const USERS_COLLECTION_NAME = 'users';
 const PENDING_INTERACTIONS_KEY = 'pending_interactions_v1';
 const SESSION_ID_KEY = 'presence_session_id_v1';
 const FLUSH_INTERVAL_MS = 15000;
@@ -39,6 +40,7 @@ async function updatePresence() {
   if (typeof window === 'undefined' || !sessionId) return;
 
   const now = Date.now();
+  const dayKey = getTodayKey(new Date(now));
   const presenceRef = doc(db, PRESENCE_COLLECTION_NAME, sessionId);
 
   try {
@@ -47,7 +49,7 @@ async function updatePresence() {
       {
         sessionId,
         userId: activeUserId,
-        dayKey: getTodayKey(new Date(now)),
+        dayKey,
         lastSeenAt: now,
         updatedAt: now,
       },
@@ -55,6 +57,24 @@ async function updatePresence() {
     );
   } catch (error) {
     console.error('[InteractionTracker] Failed to update presence', error);
+  }
+
+  if (!activeUserId) {
+    return;
+  }
+
+  try {
+    await setDoc(
+      doc(db, USERS_COLLECTION_NAME, activeUserId),
+      {
+        uid: activeUserId,
+        lastSeenAt: now,
+        lastActiveDayKey: dayKey
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.error('[InteractionTracker] Failed to update user activity', error);
   }
 }
 

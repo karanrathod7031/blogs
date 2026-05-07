@@ -25,6 +25,25 @@ function getTodayKey(date = new Date()): string {
 
 async function getPresenceStats() {
   try {
+    const [todayUserResult, currentUserResult] = await Promise.allSettled([
+      getDocs(
+        query(collection(db, 'users'), where('lastActiveDayKey', '==', getTodayKey()))
+      ),
+      getDocs(
+        query(
+          collection(db, 'users'),
+          where('lastSeenAt', '>=', Date.now() - ACTIVE_USER_WINDOW_MS)
+        )
+      )
+    ]);
+
+    if (todayUserResult.status === 'fulfilled' || currentUserResult.status === 'fulfilled') {
+      return {
+        todayActiveUsers: todayUserResult.status === 'fulfilled' ? todayUserResult.value.size : 0,
+        currentActiveUsers: currentUserResult.status === 'fulfilled' ? currentUserResult.value.size : 0
+      };
+    }
+
     const [todayPresenceResult, currentPresenceResult] = await Promise.allSettled([
       getDocs(
         query(collection(db, PRESENCE_COLLECTION_NAME), where('dayKey', '==', getTodayKey()))

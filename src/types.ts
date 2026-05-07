@@ -46,6 +46,8 @@ export interface UserProfile {
   role: 'user' | 'admin';
   createdAt?: Timestamp;
   suspended?: boolean;
+  lastSeenAt?: number;
+  lastActiveDayKey?: string;
 }
 
 export interface AppStats {
