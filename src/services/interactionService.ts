@@ -6,9 +6,9 @@ const PRESENCE_COLLECTION_NAME = 'presence';
 const ROOT_ADMIN_EMAIL = 'rk.upk2345678@gmail.com';
 const PENDING_INTERACTIONS_KEY = 'pending_interactions_v1';
 const SESSION_ID_KEY = 'presence_session_id_v1';
-const FLUSH_INTERVAL_MS = 15000;
-const BATCH_SIZE = 10;
-const PRESENCE_HEARTBEAT_MS = 60000;
+const FLUSH_INTERVAL_MS = 30000;
+const BATCH_SIZE = 25;
+const PRESENCE_HEARTBEAT_MS = 4 * 60 * 1000;
 
 let pendingInteractions = 0;
 let flushTimer: number | null = null;
@@ -19,10 +19,16 @@ let sessionId = '';
 let activeUserId: string | null = null;
 let presenceWritesBlocked = false;
 let interactionWritesBlocked = false;
+let quotaExceeded = false;
 
 function isPermissionDenied(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   return error.message.includes('Missing or insufficient permissions');
+}
+
+function isQuotaExceeded(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message.includes('Quota exceeded');
 }
 
 function getTodayKey(date = new Date()): string {
@@ -44,7 +50,7 @@ function getSessionId(): string {
 }
 
 async function updatePresence() {
-  if (typeof window === 'undefined' || !sessionId || presenceWritesBlocked) return;
+  if (typeof window === 'undefined' || !sessionId || presenceWritesBlocked || quotaExceeded) return;
 
   const now = Date.now();
   const dayKey = getTodayKey(new Date(now));
@@ -63,6 +69,10 @@ async function updatePresence() {
       { merge: true }
     );
   } catch (error) {
+    if (isQuotaExceeded(error)) {
+      quotaExceeded = true;
+      return;
+    }
     if (isPermissionDenied(error)) {
       presenceWritesBlocked = true;
       return;
@@ -95,7 +105,7 @@ function persistPendingInteractions() {
 }
 
 async function flushPendingInteractions() {
-  if (flushInFlight || pendingInteractions <= 0 || interactionWritesBlocked) {
+  if (flushInFlight || pendingInteractions <= 0 || interactionWritesBlocked || quotaExceeded) {
     return flushInFlight ?? Promise.resolve();
   }
 
@@ -109,6 +119,12 @@ async function flushPendingInteractions() {
     { merge: true }
   )
     .catch((error) => {
+      if (isQuotaExceeded(error)) {
+        quotaExceeded = true;
+        pendingInteractions += interactionsToFlush;
+        persistPendingInteractions();
+        return;
+      }
       if (isPermissionDenied(error)) {
         interactionWritesBlocked = true;
         return;

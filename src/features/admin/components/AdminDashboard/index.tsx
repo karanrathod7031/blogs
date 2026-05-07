@@ -30,6 +30,7 @@ interface AdminDashboardProps {
 }
 
 const dashboardTabs: Array<'overview' | 'users' | 'posts'> = ['overview', 'users', 'posts'];
+const OVERVIEW_AUTO_REFRESH_MS = 2 * 60 * 1000;
 
 type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -230,12 +231,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   }, [authLoading, user?.uid, profile?.role]);
 
   useEffect(() => {
+    if (activeTab !== 'overview' || !user || !isAdmin) {
+      return;
+    }
+
     const intervalId = window.setInterval(() => {
-      void handleRefreshStats();
-    }, 30000);
+      if (document.visibilityState === 'visible') {
+        void fetchData(true);
+      }
+    }, OVERVIEW_AUTO_REFRESH_MS);
 
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [activeTab, user?.uid, isAdmin]);
 
   const handleRefreshStats = async () => {
     if (!user || !isAdmin) return;
