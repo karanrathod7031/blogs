@@ -12,7 +12,7 @@ import {
   Radio,
   CalendarClock,
 } from 'lucide-react';
-import { adminService } from '../../../../services/adminService';
+import { ActiveUserRecord, adminService } from '../../../../services/adminService';
 import { UserProfile, BlogPost, AppStats } from '../../../../types';
 import { useAuthState } from '../../../../hooks/useAuthState';
 import { StatCard } from './StatCard';
@@ -68,44 +68,6 @@ function sortUsersWithAdminFirst(list: UserProfile[]): UserProfile[] {
   }).map((entry) => entry.email === ROOT_ADMIN_EMAIL ? { ...entry, role: 'admin' } : entry);
 }
 
-function buildPostDerivedStats(allPosts: BlogPost[]) {
-  const totalViews = allPosts.reduce((sum, post) => sum + (post.viewCount || 0), 0);
-  const totalLikes = allPosts.reduce((sum, post) => sum + (post.likeCount || 0), 0);
-
-  return {
-    totalPosts: allPosts.length,
-    totalViews,
-    totalLikes,
-    totalComments: 0
-  };
-}
-
-function getTodayKey(date = new Date()): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function deriveSignedInActivity(users: UserProfile[]) {
-  const todayKey = getTodayKey();
-  const activeThreshold = Date.now() - (5 * 60 * 1000);
-  const records = users
-    .filter((entry) => typeof entry.lastSeenAt === 'number')
-    .sort((left, right) => (right.lastSeenAt || 0) - (left.lastSeenAt || 0))
-    .slice(0, 6)
-    .map((entry) => ({
-      uid: entry.uid,
-      displayName: entry.displayName,
-      email: entry.email,
-      role: entry.role,
-      lastSeenAt: entry.lastSeenAt as number
-    }));
-
-  return {
-    todayActive: users.filter((entry) => entry.lastActiveDayKey === todayKey).length,
-    currentActive: users.filter((entry) => typeof entry.lastSeenAt === 'number' && entry.lastSeenAt >= activeThreshold).length,
-    records
-  };
-}
-
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) => {
   const { user, profile, loading: authLoading } = useAuthState();
   const { notify } = useNotification();
@@ -113,6 +75,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   const [postsState, setPostsState] = useState<ResourceState<BlogPost[]>>({ status: 'idle', data: null });
   const [statsState, setStatsState] = useState<ResourceState<AppStats>>({ status: 'idle', data: null });
   const [anonymousState, setAnonymousState] = useState<ResourceState<AnonymousActivityStats>>({ status: 'idle', data: null });
+  const [activeRecordsState, setActiveRecordsState] = useState<ResourceState<ActiveUserRecord[]>>({ status: 'idle', data: null });
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'posts'>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -126,20 +89,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
 
   const users = usersState.data || [];
   const posts = postsState.data || [];
-  const postDerivedStats = buildPostDerivedStats(posts);
-  const signedInActivity = deriveSignedInActivity(users);
+  const activeRecords = activeRecordsState.data || [];
   const overviewStats: Partial<Record<keyof AppStats, number | null>> = {
-    totalUsers: usersState.status === 'ready' ? users.length : null,
-    totalPosts: postsState.status === 'ready' ? postDerivedStats.totalPosts : null,
-    totalViews: postsState.status === 'ready' ? postDerivedStats.totalViews : null,
-    totalLikes: postsState.status === 'ready' ? postDerivedStats.totalLikes : null,
-    totalComments: postsState.status === 'ready' ? postDerivedStats.totalComments : null,
+    totalUsers: statsState.status === 'ready' ? (statsState.data?.totalUsers ?? 0) : null,
+    totalPosts: statsState.status === 'ready' ? (statsState.data?.totalPosts ?? 0) : null,
+    totalViews: statsState.status === 'ready' ? (statsState.data?.totalViews ?? 0) : null,
+    totalLikes: statsState.status === 'ready' ? (statsState.data?.totalLikes ?? 0) : null,
+    totalComments: statsState.status === 'ready' ? (statsState.data?.totalComments ?? 0) : null,
     totalInteractions: statsState.status === 'ready' ? (statsState.data?.totalInteractions ?? 0) : null,
-    todayActiveUsers: usersState.status === 'ready'
-      ? signedInActivity.todayActive + (anonymousState.data?.todayActive || 0)
+    todayActiveUsers: statsState.status === 'ready'
+      ? (statsState.data?.todayActiveUsers ?? 0) + (anonymousState.data?.todayActive || 0)
       : null,
-    currentActiveUsers: usersState.status === 'ready'
-      ? signedInActivity.currentActive + (anonymousState.data?.currentActive || 0)
+    currentActiveUsers: statsState.status === 'ready'
+      ? (statsState.data?.currentActiveUsers ?? 0) + (anonymousState.data?.currentActive || 0)
       : null
   };
 
@@ -207,6 +169,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
     }
   };
 
+  const fetchActiveRecords = async (silent = false) => {
+    if (!silent || !activeRecordsState.data) {
+      setActiveRecordsState((prev) => ({ ...prev, status: 'loading' }));
+    }
+
+    try {
+      const records = await adminService.getRecentActiveUsers();
+      setActiveRecordsState({ status: 'ready', data: records });
+    } catch (error) {
+      console.error('Failed to fetch active user records:', error);
+      setActiveRecordsState((prev) => ({ status: 'error', data: prev.data }));
+      notify(`Active user log sync failed: ${getErrorMessage(error)}`, 'error');
+    }
+  };
+
   const fetchData = async (silent = false) => {
     if (authLoading) return;
 
@@ -215,20 +192,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
       setPostsState((prev) => ({ ...prev, status: 'idle' }));
       setStatsState((prev) => ({ ...prev, status: 'idle' }));
       setAnonymousState((prev) => ({ ...prev, status: 'idle' }));
+      setActiveRecordsState((prev) => ({ ...prev, status: 'idle' }));
+      return;
+    }
+
+    if (activeTab === 'overview') {
+      await Promise.all([
+        fetchStats(silent),
+        fetchAnonymous(silent),
+        fetchActiveRecords(silent)
+      ]);
+      return;
+    }
+
+    if (activeTab === 'users') {
+      await fetchUsers(silent);
       return;
     }
 
     await Promise.all([
       fetchUsers(silent),
-      fetchPosts(silent),
-      fetchStats(silent),
-      fetchAnonymous(silent)
+      fetchPosts(silent)
     ]);
   };
 
   useEffect(() => {
     void fetchData();
-  }, [authLoading, user?.uid, profile?.role]);
+  }, [authLoading, user?.uid, profile?.role, activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'overview' || !user || !isAdmin) {
@@ -372,7 +362,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
     }
   };
 
-  const isBootstrapping = !authLoading && isAdmin && [usersState.status, postsState.status, statsState.status].every((status) => status === 'idle' || status === 'loading');
+  const isBootstrapping = !authLoading && isAdmin && (
+    activeTab === 'overview'
+      ? [statsState.status, anonymousState.status, activeRecordsState.status].every((status) => status === 'idle' || status === 'loading')
+      : activeTab === 'users'
+        ? (usersState.status === 'idle' || usersState.status === 'loading')
+        : [usersState.status, postsState.status].every((status) => status === 'idle' || status === 'loading')
+  );
 
   if (isBootstrapping) {
     return (
@@ -438,13 +434,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
         >
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-6">
-            <StatCard icon={<Users className="w-5 h-5" />} label="Total Nodes" value={overviewStats.totalUsers ?? null} trend="+3.2%" color="bg-blue-50 text-blue-600" status={usersState.status === 'error' ? 'error' : 'ready'} />
-            <StatCard icon={<FileText className="w-5 h-5" />} label="Total Dispatches" value={overviewStats.totalPosts ?? null} trend="+5.1%" color="bg-emerald-50 text-emerald-600" status={postsState.status === 'error' ? 'error' : 'ready'} />
-            <StatCard icon={<Eye className="w-5 h-5" />} label="Network Reach" value={overviewStats.totalViews ?? null} trend="+12.4%" color="bg-amber-50 text-amber-600" status={postsState.status === 'error' ? 'error' : 'ready'} />
-            <StatCard icon={<Activity className="w-5 h-5" />} label="Engagement" value={overviewStats.totalLikes !== null && overviewStats.totalComments !== null ? overviewStats.totalLikes + overviewStats.totalComments : null} trend="+8.2%" color="bg-rose-50 text-rose-600" status={postsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<Users className="w-5 h-5" />} label="Total Nodes" value={overviewStats.totalUsers ?? null} trend="+3.2%" color="bg-blue-50 text-blue-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<FileText className="w-5 h-5" />} label="Total Dispatches" value={overviewStats.totalPosts ?? null} trend="+5.1%" color="bg-emerald-50 text-emerald-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<Eye className="w-5 h-5" />} label="Network Reach" value={overviewStats.totalViews ?? null} trend="+12.4%" color="bg-amber-50 text-amber-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<Activity className="w-5 h-5" />} label="Engagement" value={overviewStats.totalLikes !== null && overviewStats.totalComments !== null ? overviewStats.totalLikes + overviewStats.totalComments : null} trend="+8.2%" color="bg-rose-50 text-rose-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
             <StatCard icon={<MousePointerClick className="w-5 h-5" />} label="Total Clicks" value={overviewStats.totalInteractions ?? null} trend="Live" color="bg-cyan-50 text-cyan-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
-            <StatCard icon={<CalendarClock className="w-5 h-5" />} label="Today Active" value={overviewStats.todayActiveUsers ?? null} trend="Today" color="bg-violet-50 text-violet-600" status={usersState.status === 'error' ? 'error' : 'ready'} />
-            <StatCard icon={<Radio className="w-5 h-5" />} label="Currently Active" value={overviewStats.currentActiveUsers ?? null} trend="5 min" color="bg-lime-50 text-lime-600" status={usersState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<CalendarClock className="w-5 h-5" />} label="Today Active" value={overviewStats.todayActiveUsers ?? null} trend="Today" color="bg-violet-50 text-violet-600" status={statsState.status === 'error' || anonymousState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<Radio className="w-5 h-5" />} label="Currently Active" value={overviewStats.currentActiveUsers ?? null} trend="5 min" color="bg-lime-50 text-lime-600" status={statsState.status === 'error' || anonymousState.status === 'error' ? 'error' : 'ready'} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 items-start">
@@ -457,8 +453,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
                 recentSessions={anonymousState.data?.recentSessions ?? 0}
                 status={anonymousState.status === 'error' ? 'error' : anonymousState.status === 'loading' ? 'loading' : 'ready'}
               />
-              <UserActivityLogChart records={signedInActivity.records} />
-              <ActiveUserRecordsCard records={signedInActivity.records} />
+              <UserActivityLogChart records={activeRecords} />
+              <ActiveUserRecordsCard records={activeRecords} />
               <SecurityStatusCard status={{
                 users: usersState.status,
                 posts: postsState.status,

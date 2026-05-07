@@ -6,6 +6,14 @@ import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 const PRESENCE_COLLECTION_NAME = 'presence';
 const ACTIVE_USER_WINDOW_MS = 5 * 60 * 1000;
 
+export interface ActiveUserRecord {
+  uid: string;
+  displayName: string;
+  email: string;
+  role: 'user' | 'admin';
+  lastSeenAt: number;
+}
+
 function createEmptyStats(): AppStats {
   return {
     totalPosts: 0,
@@ -69,6 +77,32 @@ async function getPresenceStats() {
 }
 
 export const adminService = {
+  async getRecentActiveUsers(): Promise<ActiveUserRecord[]> {
+    try {
+      const snapshot = await getDocs(
+        query(
+          collection(db, 'users'),
+          where('lastSeenAt', '>=', Date.now() - (24 * 60 * 60 * 1000)),
+          orderBy('lastSeenAt', 'desc'),
+          limit(6)
+        )
+      );
+
+      return snapshot.docs
+        .map((entry) => ({ uid: entry.id, ...entry.data() } as UserProfile))
+        .filter((entry) => typeof entry.lastSeenAt === 'number')
+        .map((entry) => ({
+          uid: entry.uid,
+          displayName: entry.displayName,
+          email: entry.email,
+          role: entry.role,
+          lastSeenAt: entry.lastSeenAt as number
+        }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    }
+  },
+
   async getAnonymousActivityStats() {
     try {
       const snapshot = await getDocs(query(collection(db, PRESENCE_COLLECTION_NAME), limit(250)));
