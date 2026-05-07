@@ -9,6 +9,8 @@ import {
   Search,
   Activity,
   MousePointerClick,
+  Radio,
+  CalendarClock,
 } from 'lucide-react';
 import { adminService } from '../../../../services/adminService';
 import { UserProfile, BlogPost, AppStats } from '../../../../types';
@@ -59,6 +61,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void handleRefreshStats();
+    }, 30000);
+
+    return () => window.clearInterval(intervalId);
   }, []);
 
   const handleRefreshStats = async () => {
@@ -236,12 +246,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
           className="space-y-8"
         >
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-6">
             <StatCard icon={<Users className="w-5 h-5" />} label="Total Nodes" value={stats?.totalUsers || 0} trend="+3.2%" color="bg-blue-50 text-blue-600" />
             <StatCard icon={<FileText className="w-5 h-5" />} label="Total Dispatches" value={stats?.totalPosts || 0} trend="+5.1%" color="bg-emerald-50 text-emerald-600" />
             <StatCard icon={<Eye className="w-5 h-5" />} label="Network Reach" value={stats?.totalViews || 0} trend="+12.4%" color="bg-amber-50 text-amber-600" />
             <StatCard icon={<Activity className="w-5 h-5" />} label="Engagement" value={(stats?.totalLikes || 0) + (stats?.totalComments || 0)} trend="+8.2%" color="bg-rose-50 text-rose-600" />
             <StatCard icon={<MousePointerClick className="w-5 h-5" />} label="Total Clicks" value={stats?.totalInteractions || 0} trend="Live" color="bg-cyan-50 text-cyan-600" />
+            <StatCard icon={<CalendarClock className="w-5 h-5" />} label="Today Active" value={stats?.todayActiveUsers || 0} trend="Today" color="bg-violet-50 text-violet-600" />
+            <StatCard icon={<Radio className="w-5 h-5" />} label="Currently Active" value={stats?.currentActiveUsers || 0} trend="5 min" color="bg-lime-50 text-lime-600" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">

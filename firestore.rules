@@ -52,6 +52,35 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function isValidDayKey(dayKey) {
+      return dayKey is string && dayKey.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidPresenceWrite(sessionId) {
+      return isValidId(sessionId)
+        && incoming().keys().hasOnly(['sessionId', 'userId', 'dayKey', 'lastSeenAt', 'updatedAt'])
+        && incoming().sessionId == sessionId
+        && (incoming().get('userId', null) == null || isValidId(incoming().userId))
+        && isValidDayKey(incoming().dayKey)
+        && incoming().lastSeenAt is int
+        && incoming().updatedAt is int;
+    }
+
+    function isValidPublicInteractionCreate() {
+      return incoming().keys().hasOnly(['totalInteractions'])
+        && incoming().totalInteractions is int
+        && incoming().totalInteractions >= 1
+        && incoming().totalInteractions <= 25;
+    }
+
+    function isValidPublicInteractionIncrement() {
+      return incoming().diff(existing()).affectedKeys().hasOnly(['totalInteractions'])
+        && incoming().totalInteractions is int
+        && existing().get('totalInteractions', 0) is int
+        && incoming().totalInteractions > existing().get('totalInteractions', 0)
+        && incoming().totalInteractions <= existing().get('totalInteractions', 0) + 25;
+    }
+
     // --- Post Validation ---
     function isValidPost(data) {
       let requiredFields = ['title', 'slug', 'content', 'authorId', 'authorName', 'createdAt', 'updatedAt', 'published'];
@@ -211,7 +240,14 @@ service cloud.firestore {
     }
 
     match /system/stats {
+      allow create: if isValidPublicInteractionCreate() || isAdmin();
+      allow update: if isValidPublicInteractionIncrement() || isAdmin();
       allow read, write: if isAdmin();
+    }
+
+    match /presence/{sessionId} {
+      allow create, update: if isValidPresenceWrite(sessionId);
+      allow read, list, delete: if isAdmin();
     }
 
     match /analytics/views/entries/{viewId} {

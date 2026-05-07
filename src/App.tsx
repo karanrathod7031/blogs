@@ -62,7 +62,7 @@ function AppContent() {
   usePerformanceMonitoring('AppMainFeed');
 
   useEffect(() => {
-    const cleanup = initializeInteractionTracking();
+    const cleanup = initializeInteractionTracking(user?.uid ?? null);
 
     const handleDocumentClick = (event: MouseEvent) => {
       if (!event.isTrusted) return;
@@ -75,7 +75,7 @@ function AppContent() {
       document.removeEventListener('click', handleDocumentClick);
       cleanup();
     };
-  }, []);
+  }, [user?.uid]);
 
   const navTo = useCallback((newView: View) => {
     window.scrollTo({ top: 0, behavior: 'auto' });

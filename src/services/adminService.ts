@@ -1,7 +1,44 @@
-import { collection, getDocs, doc, updateDoc, getDoc, setDoc, query, orderBy, limit, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, getDoc, setDoc, query, orderBy, limit, deleteDoc, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { UserProfile, BlogPost, AppStats } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
+
+const PRESENCE_COLLECTION_NAME = 'presence';
+const ACTIVE_USER_WINDOW_MS = 5 * 60 * 1000;
+
+function createEmptyStats(): AppStats {
+  return {
+    totalPosts: 0,
+    totalViews: 0,
+    totalUsers: 0,
+    totalLikes: 0,
+    totalComments: 0,
+    totalInteractions: 0,
+    todayActiveUsers: 0,
+    currentActiveUsers: 0
+  };
+}
+
+function getTodayKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
+async function getPresenceStats() {
+  const todayPresenceSnap = await getDocs(
+    query(collection(db, PRESENCE_COLLECTION_NAME), where('dayKey', '==', getTodayKey()))
+  );
+  const currentPresenceSnap = await getDocs(
+    query(
+      collection(db, PRESENCE_COLLECTION_NAME),
+      where('lastSeenAt', '>=', Date.now() - ACTIVE_USER_WINDOW_MS)
+    )
+  );
+
+  return {
+    todayActiveUsers: todayPresenceSnap.size,
+    currentActiveUsers: currentPresenceSnap.size
+  };
+}
 
 export const adminService = {
   async getAllUsers(): Promise<UserProfile[]> {
@@ -72,21 +109,20 @@ export const adminService = {
 
   async getAppStats(): Promise<AppStats> {
     try {
+      const presenceStats = await getPresenceStats();
       const statsDoc = await getDoc(doc(db, 'system', 'stats'));
       if (statsDoc.exists()) {
-        return statsDoc.data() as AppStats;
+        return {
+          ...createEmptyStats(),
+          ...(statsDoc.data() as Partial<AppStats>),
+          ...presenceStats
+        };
       }
       
-      // Initial stats if none exist
-      const initialStats: AppStats = {
-        totalPosts: 0,
-        totalViews: 0,
-        totalUsers: 0,
-        totalLikes: 0,
-        totalComments: 0,
-        totalInteractions: 0
+      return {
+        ...createEmptyStats(),
+        ...presenceStats
       };
-      return initialStats;
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'system/stats');
     }
@@ -98,6 +134,7 @@ export const adminService = {
       const usersSnap = await getDocs(collection(db, 'users'));
       const postsSnap = await getDocs(collection(db, 'posts'));
       const existingStatsSnap = await getDoc(statsRef);
+      const presenceStats = await getPresenceStats();
       
       let totalViews = 0;
       let totalLikes = 0;
@@ -116,7 +153,9 @@ export const adminService = {
         totalLikes,
         totalInteractions: existingStatsSnap.exists()
           ? (existingStatsSnap.data().totalInteractions as number | undefined) || 0
-          : 0
+          : 0,
+        todayActiveUsers: presenceStats.todayActiveUsers,
+        currentActiveUsers: presenceStats.currentActiveUsers
       };
 
       await setDoc(statsRef, stats);

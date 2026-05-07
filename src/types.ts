@@ -55,6 +55,8 @@ export interface AppStats {
   totalLikes: number;
   totalComments: number;
   totalInteractions: number;
+  todayActiveUsers: number;
+  currentActiveUsers: number;
 }
 
 export interface PostView {
