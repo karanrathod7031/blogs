@@ -69,6 +69,26 @@ async function getPresenceStats() {
 }
 
 export const adminService = {
+  async getAnonymousActivityStats() {
+    try {
+      const snapshot = await getDocs(query(collection(db, PRESENCE_COLLECTION_NAME), limit(250)));
+      const todayKey = getTodayKey();
+      const activeThreshold = Date.now() - ACTIVE_USER_WINDOW_MS;
+
+      const anonymousSessions = snapshot.docs
+        .map(doc => doc.data() as { userId?: string | null; dayKey?: string; lastSeenAt?: number })
+        .filter(entry => !entry.userId);
+
+      return {
+        todayActive: anonymousSessions.filter(entry => entry.dayKey === todayKey).length,
+        currentActive: anonymousSessions.filter(entry => typeof entry.lastSeenAt === 'number' && entry.lastSeenAt >= activeThreshold).length,
+        recentSessions: anonymousSessions.length
+      };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, PRESENCE_COLLECTION_NAME);
+    }
+  },
+
   async getAllUsers(): Promise<UserProfile[]> {
     try {
       const q = query(collection(db, 'users'), limit(100)); // Limit for performance

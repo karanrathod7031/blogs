@@ -21,6 +21,8 @@ import { UserRegistryTable } from './UserRegistryTable';
 import { PostArchiveTable } from './PostArchiveTable';
 import { useNotification } from '../../../../components/ui/Toast';
 import { ConfirmationModal } from '../../../../components/ui/ConfirmationModal';
+import { AnonymousActivityCard } from './AnonymousActivityCard';
+import { ActiveUserRecordsCard } from './ActiveUserRecordsCard';
 
 interface AdminDashboardProps {
   onViewPost: (slug: string) => void;
@@ -33,6 +35,12 @@ type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 interface ResourceState<T> {
   status: ResourceStatus;
   data: T | null;
+}
+
+interface AnonymousActivityStats {
+  todayActive: number;
+  currentActive: number;
+  recentSessions: number;
 }
 
 const ROOT_ADMIN_EMAIL = 'rk.upk2345678@gmail.com';
@@ -70,12 +78,39 @@ function buildPostDerivedStats(allPosts: BlogPost[]) {
   };
 }
 
+function getTodayKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function deriveSignedInActivity(users: UserProfile[]) {
+  const todayKey = getTodayKey();
+  const activeThreshold = Date.now() - (5 * 60 * 1000);
+  const records = users
+    .filter((entry) => typeof entry.lastSeenAt === 'number')
+    .sort((left, right) => (right.lastSeenAt || 0) - (left.lastSeenAt || 0))
+    .slice(0, 6)
+    .map((entry) => ({
+      uid: entry.uid,
+      displayName: entry.displayName,
+      email: entry.email,
+      role: entry.role,
+      lastSeenAt: entry.lastSeenAt as number
+    }));
+
+  return {
+    todayActive: users.filter((entry) => entry.lastActiveDayKey === todayKey).length,
+    currentActive: users.filter((entry) => typeof entry.lastSeenAt === 'number' && entry.lastSeenAt >= activeThreshold).length,
+    records
+  };
+}
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) => {
   const { user, profile, loading: authLoading } = useAuthState();
   const { notify } = useNotification();
   const [usersState, setUsersState] = useState<ResourceState<UserProfile[]>>({ status: 'idle', data: null });
   const [postsState, setPostsState] = useState<ResourceState<BlogPost[]>>({ status: 'idle', data: null });
   const [statsState, setStatsState] = useState<ResourceState<AppStats>>({ status: 'idle', data: null });
+  const [anonymousState, setAnonymousState] = useState<ResourceState<AnonymousActivityStats>>({ status: 'idle', data: null });
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'posts'>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -90,6 +125,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   const users = usersState.data || [];
   const posts = postsState.data || [];
   const postDerivedStats = buildPostDerivedStats(posts);
+  const signedInActivity = deriveSignedInActivity(users);
   const overviewStats: Partial<Record<keyof AppStats, number | null>> = {
     totalUsers: usersState.status === 'ready' ? users.length : null,
     totalPosts: postsState.status === 'ready' ? postDerivedStats.totalPosts : null,
@@ -97,8 +133,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
     totalLikes: postsState.status === 'ready' ? postDerivedStats.totalLikes : null,
     totalComments: postsState.status === 'ready' ? postDerivedStats.totalComments : null,
     totalInteractions: statsState.status === 'ready' ? (statsState.data?.totalInteractions ?? 0) : null,
-    todayActiveUsers: statsState.status === 'ready' ? (statsState.data?.todayActiveUsers ?? 0) : null,
-    currentActiveUsers: statsState.status === 'ready' ? (statsState.data?.currentActiveUsers ?? 0) : null
+    todayActiveUsers: usersState.status === 'ready'
+      ? signedInActivity.todayActive + (anonymousState.data?.todayActive || 0)
+      : null,
+    currentActiveUsers: usersState.status === 'ready'
+      ? signedInActivity.currentActive + (anonymousState.data?.currentActive || 0)
+      : null
   };
 
   const fetchUsers = async (silent = false) => {
@@ -146,6 +186,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
     }
   };
 
+  const fetchAnonymous = async (silent = false) => {
+    if (!silent || !anonymousState.data) {
+      setAnonymousState((prev) => ({ ...prev, status: 'loading' }));
+    }
+
+    try {
+      const snapshot = await adminService.getAnonymousActivityStats();
+      setAnonymousState({ status: 'ready', data: snapshot });
+    } catch (error) {
+      console.error('Failed to fetch anonymous activity:', error);
+      setAnonymousState((prev) => ({ status: 'error', data: prev.data }));
+      notify(`Anonymous activity sync failed: ${getErrorMessage(error)}`, 'error');
+    }
+  };
+
   const fetchData = async (silent = false) => {
     if (authLoading) return;
 
@@ -153,13 +208,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
       setUsersState((prev) => ({ ...prev, status: 'idle' }));
       setPostsState((prev) => ({ ...prev, status: 'idle' }));
       setStatsState((prev) => ({ ...prev, status: 'idle' }));
+      setAnonymousState((prev) => ({ ...prev, status: 'idle' }));
       return;
     }
 
     await Promise.all([
       fetchUsers(silent),
       fetchPosts(silent),
-      fetchStats(silent)
+      fetchStats(silent),
+      fetchAnonymous(silent)
     ]);
   };
 
@@ -374,14 +431,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
             <StatCard icon={<Eye className="w-5 h-5" />} label="Network Reach" value={overviewStats.totalViews ?? null} trend="+12.4%" color="bg-amber-50 text-amber-600" status={postsState.status === 'error' ? 'error' : 'ready'} />
             <StatCard icon={<Activity className="w-5 h-5" />} label="Engagement" value={overviewStats.totalLikes !== null && overviewStats.totalComments !== null ? overviewStats.totalLikes + overviewStats.totalComments : null} trend="+8.2%" color="bg-rose-50 text-rose-600" status={postsState.status === 'error' ? 'error' : 'ready'} />
             <StatCard icon={<MousePointerClick className="w-5 h-5" />} label="Total Clicks" value={overviewStats.totalInteractions ?? null} trend="Live" color="bg-cyan-50 text-cyan-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
-            <StatCard icon={<CalendarClock className="w-5 h-5" />} label="Today Active" value={overviewStats.todayActiveUsers ?? null} trend="Today" color="bg-violet-50 text-violet-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
-            <StatCard icon={<Radio className="w-5 h-5" />} label="Currently Active" value={overviewStats.currentActiveUsers ?? null} trend="5 min" color="bg-lime-50 text-lime-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<CalendarClock className="w-5 h-5" />} label="Today Active" value={overviewStats.todayActiveUsers ?? null} trend="Today" color="bg-violet-50 text-violet-600" status={usersState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<Radio className="w-5 h-5" />} label="Currently Active" value={overviewStats.currentActiveUsers ?? null} trend="5 min" color="bg-lime-50 text-lime-600" status={usersState.status === 'error' ? 'error' : 'ready'} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
             <SystemPulse stats={overviewStats} />
 
             <div className="space-y-6">
+              <AnonymousActivityCard
+                todayActive={anonymousState.status === 'ready' ? (anonymousState.data?.todayActive ?? 0) : null}
+                currentActive={anonymousState.status === 'ready' ? (anonymousState.data?.currentActive ?? 0) : null}
+                recentSessions={anonymousState.data?.recentSessions ?? 0}
+                status={anonymousState.status === 'error' ? 'error' : anonymousState.status === 'loading' ? 'loading' : 'ready'}
+              />
+              <ActiveUserRecordsCard records={signedInActivity.records} />
               <SecurityStatusCard status={{
                 users: usersState.status,
                 posts: postsState.status,
