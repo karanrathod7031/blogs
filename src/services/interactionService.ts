@@ -17,6 +17,13 @@ let flushInFlight: Promise<void> | null = null;
 let presenceTimer: number | null = null;
 let sessionId = '';
 let activeUserId: string | null = null;
+let presenceWritesBlocked = false;
+let interactionWritesBlocked = false;
+
+function isPermissionDenied(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message.includes('Missing or insufficient permissions');
+}
 
 function getTodayKey(date = new Date()): string {
   return date.toISOString().slice(0, 10);
@@ -37,7 +44,7 @@ function getSessionId(): string {
 }
 
 async function updatePresence() {
-  if (typeof window === 'undefined' || !sessionId) return;
+  if (typeof window === 'undefined' || !sessionId || presenceWritesBlocked) return;
 
   const now = Date.now();
   const dayKey = getTodayKey(new Date(now));
@@ -56,6 +63,10 @@ async function updatePresence() {
       { merge: true }
     );
   } catch (error) {
+    if (isPermissionDenied(error)) {
+      presenceWritesBlocked = true;
+      return;
+    }
     if (import.meta.env.DEV) {
       console.error('[InteractionTracker] Failed to update presence', error);
     }
@@ -84,7 +95,7 @@ function persistPendingInteractions() {
 }
 
 async function flushPendingInteractions() {
-  if (flushInFlight || pendingInteractions <= 0) {
+  if (flushInFlight || pendingInteractions <= 0 || interactionWritesBlocked) {
     return flushInFlight ?? Promise.resolve();
   }
 
@@ -98,9 +109,15 @@ async function flushPendingInteractions() {
     { merge: true }
   )
     .catch((error) => {
+      if (isPermissionDenied(error)) {
+        interactionWritesBlocked = true;
+        return;
+      }
       pendingInteractions += interactionsToFlush;
       persistPendingInteractions();
-      console.error('[InteractionTracker] Failed to flush interactions', error);
+      if (import.meta.env.DEV) {
+        console.error('[InteractionTracker] Failed to flush interactions', error);
+      }
     })
     .finally(() => {
       flushInFlight = null;

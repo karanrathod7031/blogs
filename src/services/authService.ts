@@ -19,7 +19,13 @@ export const authService = {
   async signInWithGoogle(): Promise<User> {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      await this.syncUserProfile(result.user);
+      try {
+        await this.syncUserProfile(result.user);
+      } catch (profileSyncError) {
+        if (import.meta.env.DEV) {
+          console.error('Profile sync failed after successful sign-in:', profileSyncError);
+        }
+      }
       return result.user;
     } catch (error) {
       console.error('Auth error:', error);

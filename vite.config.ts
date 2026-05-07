@@ -55,7 +55,6 @@ export default defineConfig(({mode}) => {
             if (id.includes('/firebase/')) return 'firebase';
             if (id.includes('/@tiptap/') || id.includes('/prosemirror-') || id.includes('/tiptap-markdown')) return 'editor';
             if (id.includes('/react-markdown/') || id.includes('/remark-') || id.includes('/rehype-') || id.includes('/unified/') || id.includes('/micromark/')) return 'markdown';
-            if (id.includes('/recharts/') || id.includes('/d3-')) return 'charts';
             if (id.includes('/@google/genai/')) return 'ai';
           },
         },
