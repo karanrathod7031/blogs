@@ -193,6 +193,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
 
     try {
       const snapshot = await adminService.getAnonymousActivityStats();
+      if (!snapshot) {
+        setAnonymousState((prev) => ({ status: 'error', data: prev.data }));
+        return;
+      }
       setAnonymousState({ status: 'ready', data: snapshot });
     } catch (error) {
       console.error('Failed to fetch anonymous activity:', error);

@@ -1,6 +1,5 @@
 import React from 'react';
 import { BarChart3 } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AppStats } from '../../../../types';
 
 interface SystemPulseProps {
@@ -32,6 +31,7 @@ const formatMetric = (value: number) => {
 
 export const SystemPulse: React.FC<SystemPulseProps> = ({ stats }) => {
   const telemetryData = buildTelemetryData(stats);
+  const maxValue = telemetryData.reduce((max, item) => Math.max(max, item.value), 0) || 1;
 
   return (
     <div className="premium-card p-8 bg-card border border-border shadow-xl min-w-0">
@@ -43,39 +43,27 @@ export const SystemPulse: React.FC<SystemPulseProps> = ({ stats }) => {
       </div>
       <div className="h-[300px] min-w-0">
         {telemetryData.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={telemetryData} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
-              <CartesianGrid vertical={false} stroke="rgba(148, 163, 184, 0.14)" />
-              <XAxis
-                dataKey="label"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#64748b', fontSize: 11, fontWeight: 800 }}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                width={50}
-                tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }}
-                tickFormatter={(value: number) => formatMetric(value)}
-              />
-              <Tooltip
-                cursor={{ fill: 'rgba(34, 211, 238, 0.08)' }}
-                contentStyle={{
-                  borderRadius: '16px',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  backgroundColor: 'rgba(255,255,255,0.96)',
-                  boxShadow: '0 16px 40px rgba(15, 23, 42, 0.12)',
-                }}
-                formatter={(value: number) => [formatMetric(value), 'Signals']}
-              />
-              <Bar dataKey="value" radius={[16, 16, 0, 0]} maxBarSize={56}>
-                {telemetryData.map((entry) => (
-                  <Cell key={entry.label} fill={entry.color} fillOpacity={0.86} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="grid h-full grid-cols-8 gap-3 items-end border-t border-b border-border/60 py-6">
+            {telemetryData.map((entry) => (
+              <div key={entry.label} className="flex h-full min-w-0 flex-col justify-end gap-3">
+                <div className="flex-1 flex items-end justify-center">
+                  <div
+                    className="w-full max-w-[56px] rounded-t-[18px] transition-all duration-300"
+                    style={{
+                      height: `${Math.max((entry.value / maxValue) * 100, 8)}%`,
+                      backgroundColor: entry.color,
+                      opacity: 0.88
+                    }}
+                    title={`${entry.label}: ${formatMetric(entry.value)}`}
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-ink-muted">{entry.label}</p>
+                  <p className="text-xs font-bold text-ink">{formatMetric(entry.value)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="h-full flex items-center justify-center text-center text-ink-muted">
             <div>

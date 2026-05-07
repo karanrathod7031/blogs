@@ -5,6 +5,12 @@ import { auth, db } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 
+const ROOT_ADMIN_EMAIL = 'rk.upk2345678@gmail.com';
+
+function getTodayKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
 export function useAuthState() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -71,6 +77,57 @@ export function useAuthState() {
       if (unsubProfile) unsubProfile();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user || !profile) {
+      return;
+    }
+
+    const syncActivity = async () => {
+      try {
+        await setDoc(
+          doc(db, 'users', user.uid),
+          {
+            uid: user.uid,
+            displayName: profile.displayName || user.displayName || 'Anonymous User',
+            email: profile.email || user.email || '',
+            photoURL: profile.photoURL || user.photoURL || '',
+            bio: profile.bio || '',
+            role: profile.role || (user.email === ROOT_ADMIN_EMAIL ? 'admin' : 'user'),
+            suspended: profile.suspended ?? false,
+            createdAt: profile.createdAt ?? serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            lastSeenAt: Date.now(),
+            lastActiveDayKey: getTodayKey()
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('SYSTEM: Activity sync error:', error);
+        }
+      }
+    };
+
+    void syncActivity();
+
+    const intervalId = window.setInterval(() => {
+      void syncActivity();
+    }, 60000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void syncActivity();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user?.uid, user?.displayName, user?.email, user?.photoURL, profile]);
 
   return { user, profile, loading };
 }

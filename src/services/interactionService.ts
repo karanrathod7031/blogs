@@ -1,9 +1,8 @@
-import { doc, increment, serverTimestamp, setDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { doc, increment, setDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 const STATS_DOC_REF = doc(db, 'system', 'stats');
 const PRESENCE_COLLECTION_NAME = 'presence';
-const USERS_COLLECTION_NAME = 'users';
 const ROOT_ADMIN_EMAIL = 'rk.upk2345678@gmail.com';
 const PENDING_INTERACTIONS_KEY = 'pending_interactions_v1';
 const SESSION_ID_KEY = 'presence_session_id_v1';
@@ -62,36 +61,8 @@ async function updatePresence() {
     }
   }
 
-  if (!activeUserId) {
-    return;
-  }
-
-  const userRef = doc(db, USERS_COLLECTION_NAME, activeUserId);
-  const currentUser = auth.currentUser;
-
-  try {
-    await setDoc(
-      userRef,
-      {
-        uid: activeUserId,
-        displayName: currentUser?.displayName || 'Anonymous User',
-        email: currentUser?.email || '',
-        photoURL: currentUser?.photoURL || '',
-        role: currentUser?.email === ROOT_ADMIN_EMAIL ? 'admin' : 'user',
-        bio: '',
-        suspended: false,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastSeenAt: now,
-        lastActiveDayKey: dayKey
-      },
-      { merge: true }
-    );
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error('[InteractionTracker] Failed to update user activity', error);
-    }
-  }
+  void activeUserId;
+  void ROOT_ADMIN_EMAIL;
 }
 
 function readPendingInteractions(): number {

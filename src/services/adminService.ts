@@ -85,11 +85,7 @@ export const adminService = {
         recentSessions: anonymousSessions.length
       };
     } catch {
-      return {
-        todayActive: 0,
-        currentActive: 0,
-        recentSessions: 0
-      };
+      return null;
     }
   },
 
