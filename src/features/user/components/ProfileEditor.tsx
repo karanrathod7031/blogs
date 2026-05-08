@@ -113,9 +113,20 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
     setSaving(true);
     try {
       await setDoc(doc(db, 'users', user.uid), {
-        ...profile,
-        updatedAt: serverTimestamp()
-      });
+        uid: user.uid,
+        displayName: profile.displayName || user.displayName || 'Anonymous User',
+        email: profile.email || user.email || '',
+        photoURL: profile.photoURL || '',
+        bio: profile.bio || '',
+        location: profile.location || '',
+        website: profile.website || '',
+        role: profile.role || 'user',
+        suspended: profile.suspended ?? false,
+        createdAt: profile.createdAt ?? serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastSeenAt: profile.lastSeenAt ?? Date.now(),
+        lastActiveDayKey: profile.lastActiveDayKey || new Date().toISOString().slice(0, 10)
+      }, { merge: true });
       onNotify('Identity synchronized successfully', 'success');
     } catch (err) {
       console.error('Failed to update identity:', err);

@@ -26,7 +26,6 @@ import {
 import { BlogPost } from '../../../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -41,7 +40,6 @@ import { TableRow as TiptapTableRow } from '@tiptap/extension-table-row';
 import { TableHeader as TiptapTableHeader } from '@tiptap/extension-table-header';
 import { TableCell as TiptapTableCell } from '@tiptap/extension-table-cell';
 import { TextAlign } from '@tiptap/extension-text-align';
-import { GoogleGenAI } from "@google/genai";
 
 interface BlogEditorProps {
   post?: BlogPost;
@@ -235,18 +233,24 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
     if (!content) return;
     setSummarizing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Summarize the following blog post in exactly 1-2 sentences. Return ONLY the plain text summary. Do not include any labels, options, conversational filler, or markdown formatting like bold (**). Body: ${content}`,
+      const response = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ content })
       });
-      const text = response.text;
-      if (text) {
-        // Clean up any remaining markdown bold markers just in case
-        setExcerpt(text.trim().replace(/\*\*/g, ''));
+
+      const payload = await response.json() as { summary?: string; error?: string };
+
+      if (!response.ok || !payload.summary) {
+        throw new Error(payload.error || 'AI summary unavailable');
       }
+
+      setExcerpt(payload.summary.trim().replace(/\*\*/g, ''));
     } catch (err) {
-      console.error(err);
+      console.error('AI summary failed:', err);
+      onNotify('AI summary is currently unavailable.', 'error');
     } finally {
       setSummarizing(false);
     }
@@ -354,7 +358,7 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
                )}
 
                <div className="prose prose-sm md:prose-lg max-w-none prose-headings:font-black prose-headings:text-ink prose-p:text-ink-muted prose-strong:text-ink prose-strong:font-black prose-a:text-accent prose-table:border prose-table:border-border prose-th:bg-bg-soft prose-th:px-4 prose-th:py-2 prose-td:border prose-td:border-border prose-td:px-4 prose-td:py-2">
-                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{content || '*The canvas is currently empty.*'}</ReactMarkdown>
+                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '*The canvas is currently empty.*'}</ReactMarkdown>
                </div>
              </div>
           </article>

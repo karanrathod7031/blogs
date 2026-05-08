@@ -1,6 +1,5 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
 import { 
   ArrowLeft, 
@@ -442,7 +441,7 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
             )}
 
             <div className="prose prose-sm md:prose-lg max-w-none prose-headings:text-ink prose-headings:font-black prose-p:text-ink-muted prose-p:leading-relaxed prose-strong:text-ink prose-strong:font-black prose-a:text-accent prose-blockquote:border-l-accent prose-blockquote:bg-bg-soft prose-blockquote:rounded-r-xl prose-img:rounded-3xl prose-table:border prose-table:border-border prose-th:bg-bg-soft prose-th:px-4 prose-th:py-2 prose-td:border prose-td:border-border prose-td:px-4 prose-td:py-2">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{post.content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
             </div>
           </div>
 

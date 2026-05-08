@@ -9,7 +9,7 @@ This platform is designed to be more than just a blog; it's a technical archive 
 - **Frontend**: React 19 + Vite + Tailwind CSS
 - **Motion**: motion/react for fluid transitions
 - **Backend**: Firebase (Firestore, Auth, Security Rules)
-- **AI**: Gemini Pro API for smart content generation
+- **AI**: Server-side Gemini API for smart content generation
 - **Architecture**: Domain-Driven Feature Structure + Service Layer Pattern
 
 ## ✨ Production Features
@@ -32,6 +32,8 @@ VITE_FIREBASE_APP_ID=your_app_id
 VITE_FIREBASE_DATABASE_ID=(default)
 GEMINI_API_KEY=your_gemini_key
 ```
+
+The Gemini key is server-only. Do not expose it through `VITE_` environment variables or client-side code.
 
 ## 🔐 Security Audit Results
 - [x] Global Deny-All Safety Net
