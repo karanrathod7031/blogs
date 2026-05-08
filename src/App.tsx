@@ -305,7 +305,7 @@ function AppContent() {
             onPageSelect={(page) => void fetchPosts(page)}
             hasMore={hasMore}
             currentPage={currentPage}
-            knownPageCount={pageCache.length + (hasMore ? 1 : 0)}
+            knownPageCount={Math.max(1, pageCache.length)}
             loadingMore={loadingMore}
             loading={loading}
           />
