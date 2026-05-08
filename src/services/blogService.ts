@@ -25,7 +25,7 @@ import { BlogPost, Comment } from '../types';
 import { requestOrchestrator } from '../core/scaling/RequestOrchestrator';
 
 const COLLECTION_NAME = 'posts';
-const PUBLISHED_POSTS_PAGE_SIZE = 4;
+const PUBLISHED_POSTS_PAGE_SIZE = 10;
 
 // Interaction Services
 

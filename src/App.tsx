@@ -25,7 +25,7 @@ import { cacheStrategy } from './core/scaling/CacheStrategy';
 import { initializeInteractionTracking, trackInteraction } from './services/interactionService';
 
 const BlogEditor = lazy(() => import('./features/blog/components/BlogEditor'));
-const POSTS_PAGE_SIZE = 4;
+const POSTS_PAGE_SIZE = 10;
 
 interface CachedPostsPage {
   posts: BlogPost[];
