@@ -14,7 +14,10 @@ import {
   User as UserIcon,
   Twitter,
   Facebook,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Briefcase,
+  DollarSign,
+  MapPin
 } from 'lucide-react';
 import { BlogPost, UserProfile, Comment } from '../../../types';
 import { format } from 'date-fns';

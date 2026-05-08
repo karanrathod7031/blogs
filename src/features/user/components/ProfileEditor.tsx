@@ -51,15 +51,17 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
           const canvas = document.createElement('canvas');
           // Square target for DP
           const SIZE = 400;
+          const sourceWidth = img.width;
+          const sourceHeight = img.height;
           
           canvas.width = SIZE;
           canvas.height = SIZE;
           const ctx = canvas.getContext('2d');
           
           // Center crop to square
-          const minDim = Math.min(width, height);
-          const sx = (width - minDim) / 2;
-          const sy = (height - minDim) / 2;
+          const minDim = Math.min(sourceWidth, sourceHeight);
+          const sx = (sourceWidth - minDim) / 2;
+          const sy = (sourceHeight - minDim) / 2;
           
           ctx?.drawImage(img, sx, sy, minDim, minDim, 0, 0, SIZE, SIZE);
 

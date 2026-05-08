@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, WithFieldValue } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
@@ -58,14 +58,18 @@ export function useAuthState() {
           website: '',
           role: authUser.email === ROOT_ADMIN_EMAIL ? 'admin' : 'user',
           suspended: false,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
           lastSeenAt: Date.now(),
           lastActiveDayKey: getTodayKey()
         };
 
+        const newProfileWrite: WithFieldValue<UserProfile> = {
+          ...newProfile,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+
         try {
-          await setDoc(profileRef, newProfile);
+          await setDoc(profileRef, newProfileWrite);
           if (!cancelled) {
             setProfile(newProfile);
           }
@@ -150,21 +154,25 @@ export function useAuthState() {
       }
 
       try {
+        const profileWrite: WithFieldValue<UserProfile> = {
+          uid: user.uid,
+          displayName: profile.displayName || user.displayName || 'Anonymous User',
+          email: profile.email || user.email || '',
+          photoURL: profile.photoURL || user.photoURL || '',
+          bio: profile.bio || '',
+          location: profile.location || '',
+          website: profile.website || '',
+          role: profile.role || (user.email === ROOT_ADMIN_EMAIL ? 'admin' : 'user'),
+          suspended: profile.suspended ?? false,
+          createdAt: profile.createdAt ?? serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          lastSeenAt: now,
+          lastActiveDayKey: getTodayKey()
+        };
+
         await setDoc(
           doc(db, 'users', user.uid),
-          {
-            uid: user.uid,
-            displayName: profile.displayName || user.displayName || 'Anonymous User',
-            email: profile.email || user.email || '',
-            photoURL: profile.photoURL || user.photoURL || '',
-            bio: profile.bio || '',
-            role: profile.role || (user.email === ROOT_ADMIN_EMAIL ? 'admin' : 'user'),
-            suspended: profile.suspended ?? false,
-            createdAt: profile.createdAt ?? serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            lastSeenAt: now,
-            lastActiveDayKey: getTodayKey()
-          },
+          profileWrite,
           { merge: true }
         );
         writeLastActivitySync(user.uid, now);

@@ -28,7 +28,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import TurndownService from 'turndown';
-// @ts-expect-error - turndown-plugin-gfm doesn't have types
 import { gfm } from 'turndown-plugin-gfm';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
@@ -50,6 +49,10 @@ interface BlogEditorProps {
   onCancel: () => void;
   onDelete?: (id: string) => Promise<void>;
   onNotify: (msg: string, type: 'success' | 'error') => void;
+}
+
+interface MarkdownCapableEditor {
+  getMarkdown?: () => string;
 }
 
 const CATEGORIES = ['AI', 'Agriculture', 'Finance', 'Web Dev', 'Projects', 'Career', 'Engineering', 'Social', 'Design', 'Commodities', 'Services', 'Healthcare', 'Logistics', 'Other'];
@@ -176,9 +179,13 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
     content: content,
     onUpdate: ({ editor }) => {
       try {
-        // @ts-expect-error - tiptap-markdown adds getMarkdown
-        const md = editor.getMarkdown();
-        setContent(md);
+        const markdownEditor = editor as typeof editor & MarkdownCapableEditor;
+        if (typeof markdownEditor.getMarkdown === 'function') {
+          setContent(markdownEditor.getMarkdown());
+          return;
+        }
+
+        throw new Error('Markdown extension is unavailable');
       } catch (err) {
         console.warn('tiptap-markdown failed, falling back to turndown:', err);
         const html = editor.getHTML();
@@ -187,7 +194,6 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
           codeBlockStyle: 'fenced',
           bulletListMarker: '-'
         });
-        // @ts-expect-error - gfm plugin types
         turndownService.use(gfm);
         const md = turndownService.turndown(html);
         setContent(md);

@@ -43,8 +43,11 @@ export interface UserProfile {
   email: string;
   photoURL?: string;
   bio?: string;
+  location?: string;
+  website?: string;
   role: 'user' | 'admin';
   createdAt?: Timestamp;
+  updatedAt?: Timestamp;
   suspended?: boolean;
   lastSeenAt?: number;
   lastActiveDayKey?: string;

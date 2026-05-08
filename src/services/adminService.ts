@@ -31,6 +31,13 @@ function getTodayKey(date = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
 
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: string }).code === code;
+}
+
 async function getPresenceStats() {
   try {
     const [todayUserResult, currentUserResult] = await Promise.allSettled([
@@ -152,7 +159,7 @@ export const adminService = {
         updatedAt: serverTimestamp()
       });
       console.log(`[adminService] Successfully updated suspension status for: users/${userId}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`[adminService] FAILED to toggle suspension for: users/${userId}`, error);
       handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
       throw error;
@@ -165,7 +172,7 @@ export const adminService = {
       const userRef = doc(db, 'users', userId);
       await deleteDoc(userRef);
       console.log(`[adminService] Successfully purged user: users/${userId}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`[adminService] FAILED to delete user: users/${userId}`, error);
       handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);
       throw error;
@@ -178,10 +185,10 @@ export const adminService = {
       const postRef = doc(db, 'posts', postId);
       await deleteDoc(postRef);
       console.log(`[adminService] Successfully deleted document: posts/${postId}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`[adminService] FAILED to delete document: posts/${postId}`, error);
       // Extra check for permission denied specifically
-      if (error.code === 'permission-denied') {
+      if (hasErrorCode(error, 'permission-denied')) {
         console.error('[adminService] Permission Denied. Check if your account is root admin and email is verified.');
       }
       handleFirestoreError(error, OperationType.DELETE, `posts/${postId}`);
