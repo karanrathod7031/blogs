@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { format } from 'date-fns';
-import { Download, FileText, RefreshCcw, Search, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
+import { format, startOfDay, subDays } from 'date-fns';
+import { ChevronLeft, ChevronRight, Download, FileText, RefreshCcw, Search, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { AdminAuditAction, AdminAuditLog } from '../../../../types';
 
 interface AuditHistoryTableProps {
   logs: AdminAuditLog[];
 }
+
+const PAGE_SIZE = 20;
 
 const ACTION_FILTERS: Array<{ value: 'all' | AdminAuditAction; label: string }> = [
   { value: 'all', label: 'All Actions' },
@@ -15,6 +17,15 @@ const ACTION_FILTERS: Array<{ value: 'all' | AdminAuditAction; label: string }> 
   { value: 'delete_post', label: 'Posts Deleted' },
   { value: 'refresh_stats', label: 'Stats Refreshed' }
 ];
+
+const DATE_FILTERS = [
+  { value: 'all', label: 'All Time' },
+  { value: 'today', label: 'Today' },
+  { value: '7d', label: 'Last 7 Days' },
+  { value: '30d', label: 'Last 30 Days' }
+] as const;
+
+type DateFilter = typeof DATE_FILTERS[number]['value'];
 
 function getActionCopy(action: AdminAuditLog['action']) {
   switch (action) {
@@ -59,13 +70,40 @@ function downloadAuditCsv(rows: AdminAuditLog[]) {
 export const AuditHistoryTable: React.FC<AuditHistoryTableProps> = ({ logs }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState<'all' | AdminAuditAction>('all');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('7d');
+  const [page, setPage] = useState(1);
+
+  const dateThreshold = useMemo(() => {
+    switch (dateFilter) {
+      case 'today':
+        return startOfDay(new Date()).getTime();
+      case '7d':
+        return subDays(new Date(), 7).getTime();
+      case '30d':
+        return subDays(new Date(), 30).getTime();
+      default:
+        return null;
+    }
+  }, [dateFilter]);
 
   const filteredLogs = useMemo(() => logs.filter((log) => {
     const matchesAction = actionFilter === 'all' || log.action === actionFilter;
     const haystack = `${log.targetLabel} ${log.targetId} ${log.actorEmail} ${log.targetType}`.toLowerCase();
     const matchesSearch = haystack.includes(searchTerm.toLowerCase());
-    return matchesAction && matchesSearch;
-  }), [actionFilter, logs, searchTerm]);
+    const createdAtMs = log.createdAt?.toDate().getTime() ?? Date.now();
+    const matchesDate = dateThreshold === null || createdAtMs >= dateThreshold;
+    return matchesAction && matchesSearch && matchesDate;
+  }), [actionFilter, dateThreshold, logs, searchTerm]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedLogs = useMemo(
+    () => filteredLogs.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [currentPage, filteredLogs]
+  );
+
+  const pageStart = filteredLogs.length === 0 ? 0 : ((currentPage - 1) * PAGE_SIZE) + 1;
+  const pageEnd = Math.min(currentPage * PAGE_SIZE, filteredLogs.length);
 
   return (
     <div className="space-y-6">
@@ -95,10 +133,32 @@ export const AuditHistoryTable: React.FC<AuditHistoryTableProps> = ({ logs }) =>
         {ACTION_FILTERS.map((filter) => (
           <button
             key={filter.value}
-            onClick={() => setActionFilter(filter.value)}
+            onClick={() => {
+              setActionFilter(filter.value);
+              setPage(1);
+            }}
             className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer ${
               actionFilter === filter.value
                 ? 'bg-accent/10 text-accent border-accent/20'
+                : 'bg-bg-soft text-ink-muted border-border hover:text-ink'
+            }`}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {DATE_FILTERS.map((filter) => (
+          <button
+            key={filter.value}
+            onClick={() => {
+              setDateFilter(filter.value);
+              setPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer ${
+              dateFilter === filter.value
+                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
                 : 'bg-bg-soft text-ink-muted border-border hover:text-ink'
             }`}
           >
@@ -118,7 +178,7 @@ export const AuditHistoryTable: React.FC<AuditHistoryTableProps> = ({ logs }) =>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {filteredLogs.map((log) => {
+            {paginatedLogs.map((log) => {
               const action = getActionCopy(log.action);
               const ActionIcon = action.icon;
 
@@ -150,6 +210,35 @@ export const AuditHistoryTable: React.FC<AuditHistoryTableProps> = ({ logs }) =>
           </tbody>
         </table>
       </div>
+
+      {filteredLogs.length > 0 && (
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <p className="text-xs font-bold text-ink-muted">
+            Showing {pageStart}-{pageEnd} of {filteredLogs.length} audit records
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              disabled={currentPage === 1}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-border bg-bg-soft text-xs font-black uppercase tracking-widest text-ink-muted hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Prev
+            </button>
+            <span className="px-3 py-2 rounded-xl border border-border bg-card text-xs font-black text-ink-muted">
+              Page {currentPage} / {pageCount}
+            </span>
+            <button
+              onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+              disabled={currentPage === pageCount}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-border bg-bg-soft text-xs font-black uppercase tracking-widest text-ink-muted hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {filteredLogs.length === 0 && (
         <div className="p-20 text-center opacity-40 bg-bg-soft border border-border rounded-[2rem]">
