@@ -25,13 +25,15 @@ import { AnonymousActivityCard } from './AnonymousActivityCard';
 import { ActiveUserRecordsCard } from './ActiveUserRecordsCard';
 import { UserActivityLogChart } from './UserActivityLogChart';
 import { AdminAuditLogCard } from './AdminAuditLogCard';
+import { AuditHistoryTable } from './AuditHistoryTable';
 
 interface AdminDashboardProps {
   onViewPost: (slug: string) => void;
 }
 
-const dashboardTabs: Array<'overview' | 'users' | 'posts'> = ['overview', 'users', 'posts'];
+const dashboardTabs: Array<'overview' | 'users' | 'posts' | 'audits'> = ['overview', 'users', 'posts', 'audits'];
 const OVERVIEW_AUTO_REFRESH_MS = 2 * 60 * 1000;
+const AUDIT_HISTORY_LIMIT = 150;
 
 type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -78,7 +80,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   const [anonymousState, setAnonymousState] = useState<ResourceState<AnonymousActivityStats>>({ status: 'idle', data: null });
   const [activeRecordsState, setActiveRecordsState] = useState<ResourceState<ActiveUserRecord[]>>({ status: 'idle', data: null });
   const [auditLogsState, setAuditLogsState] = useState<ResourceState<AdminAuditLog[]>>({ status: 'idle', data: null });
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'posts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'posts' | 'audits'>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -193,7 +195,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
     }
 
     try {
-      const records = await adminService.getRecentAuditLogs();
+      const records = silent && auditLogsState.data
+        ? await adminService.getRecentAuditLogs()
+        : await adminService.getAuditLogs(AUDIT_HISTORY_LIMIT);
       setAuditLogsState({ status: 'ready', data: records });
     } catch (error) {
       console.error('Failed to fetch admin audit logs:', error);
@@ -230,10 +234,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
       return;
     }
 
-    await Promise.all([
-      fetchUsers(silent),
-      fetchPosts(silent)
-    ]);
+    if (activeTab === 'posts') {
+      await Promise.all([
+        fetchUsers(silent),
+        fetchPosts(silent)
+      ]);
+      return;
+    }
+
+    await fetchAuditLogs(silent);
   };
 
   useEffect(() => {
@@ -387,7 +396,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
       ? [statsState.status, anonymousState.status, activeRecordsState.status, auditLogsState.status].every((status) => status === 'idle' || status === 'loading')
       : activeTab === 'users'
         ? (usersState.status === 'idle' || usersState.status === 'loading')
-        : [usersState.status, postsState.status].every((status) => status === 'idle' || status === 'loading')
+        : activeTab === 'posts'
+          ? [usersState.status, postsState.status].every((status) => status === 'idle' || status === 'loading')
+          : (auditLogsState.status === 'idle' || auditLogsState.status === 'loading')
   );
 
   if (isBootstrapping) {
@@ -441,7 +452,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
             onClick={() => setActiveTab(tab)}
             className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer capitalize ${activeTab === tab ? 'bg-card text-accent shadow-sm border border-border' : 'text-ink-muted hover:text-ink'}`}
           >
-            {tab === 'users' ? 'User Registry' : tab === 'posts' ? 'Global Archive' : tab}
+            {tab === 'users' ? 'User Registry' : tab === 'posts' ? 'Global Archive' : tab === 'audits' ? 'Audit History' : tab}
           </button>
         ))}
       </div>
@@ -492,22 +503,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
         </motion.div>
       )}
 
-      {(activeTab === 'users' || activeTab === 'posts') && (
+      {(activeTab === 'users' || activeTab === 'posts' || activeTab === 'audits') && (
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           className="space-y-6"
         >
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted" />
-            <input 
-              type="text"
-              placeholder={`Search ${activeTab}...`}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-6 py-4 bg-bg-soft border border-border rounded-2xl outline-none focus:border-accent transition-all font-medium text-sm text-ink placeholder:text-ink-muted/50"
-            />
-          </div>
+          {activeTab !== 'audits' && (
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted" />
+              <input 
+                type="text"
+                placeholder={`Search ${activeTab}...`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-6 py-4 bg-bg-soft border border-border rounded-2xl outline-none focus:border-accent transition-all font-medium text-sm text-ink placeholder:text-ink-muted/50"
+              />
+            </div>
+          )}
 
           {activeTab === 'users' ? (
             usersState.status === 'error' && filteredUsers.length === 0 ? (
@@ -522,7 +535,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
                 currentUserId={user?.uid}
               />
             )
-          ) : (
+          ) : activeTab === 'posts' ? (
             postsState.status === 'error' && filteredPosts.length === 0 ? (
               <DataUnavailablePanel label="Global archive" />
             ) : (
@@ -536,9 +549,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
                 onViewPost={onViewPost}
               />
             )
+          ) : (
+            auditLogsState.status === 'error' && auditLogs.length === 0 ? (
+              <DataUnavailablePanel label="Audit history" />
+            ) : (
+              <AuditHistoryTable logs={auditLogs} />
+            )
           )}
 
-          {(activeTab === 'users' ? filteredUsers : filteredPosts).length === 0 && !((activeTab === 'users' ? usersState.status : postsState.status) === 'error') && (
+          {(activeTab === 'users' ? filteredUsers : filteredPosts).length === 0 && activeTab !== 'audits' && !((activeTab === 'users' ? usersState.status : postsState.status) === 'error') && (
             <div className="p-20 text-center opacity-30 bg-bg-soft border border-border rounded-[2rem]">
               <Search className="w-12 h-12 mx-auto mb-4 text-ink-muted" />
               <p className="text-xs font-black uppercase tracking-widest text-ink-muted">No signals found in current frequency</p>

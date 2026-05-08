@@ -117,13 +117,13 @@ async function getPresenceStats() {
 }
 
 export const adminService = {
-  async getRecentAuditLogs(): Promise<AdminAuditLog[]> {
+  async getAuditLogs(limitCount = 100): Promise<AdminAuditLog[]> {
     try {
       const snapshot = await getDocs(
         query(
           collection(db, AUDIT_LOG_COLLECTION_NAME),
           orderBy('createdAt', 'desc'),
-          limit(10)
+          limit(limitCount)
         )
       );
 
@@ -134,6 +134,10 @@ export const adminService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, AUDIT_LOG_COLLECTION_NAME);
     }
+  },
+
+  async getRecentAuditLogs(): Promise<AdminAuditLog[]> {
+    return this.getAuditLogs(10);
   },
 
   async getRecentActiveUsers(): Promise<ActiveUserRecord[]> {
