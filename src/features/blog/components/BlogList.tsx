@@ -1,6 +1,6 @@
 import { useState, useMemo, memo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Search, Clock, Calendar, ArrowRight, BookOpen, Briefcase, MapPin, DollarSign } from 'lucide-react';
+import { Search, Clock, Calendar, ArrowLeft, ArrowRight, BookOpen, Briefcase, MapPin, DollarSign } from 'lucide-react';
 import { BlogPost } from '../../../types';
 import { format } from 'date-fns';
 import { calculateReadingTime } from '../../../lib/blog-utils';
@@ -11,8 +11,10 @@ interface BlogListProps {
   posts: BlogPost[];
   onSelectPost: (slug: string) => void;
   onViewProfile: (userId: string) => void;
-  onLoadMore?: () => void;
+  onNextPage?: () => void;
+  onPreviousPage?: () => void;
   hasMore?: boolean;
+  currentPage?: number;
   loadingMore?: boolean;
   loading?: boolean;
 }
@@ -102,8 +104,10 @@ export default function BlogList({
   posts, 
   onSelectPost, 
   onViewProfile,
-  onLoadMore,
+  onNextPage,
+  onPreviousPage,
   hasMore,
+  currentPage = 1,
   loadingMore,
   loading
 }: BlogListProps) {
@@ -292,23 +296,39 @@ export default function BlogList({
         )}
       </div>
 
-      {/* Load More Button */}
-      {hasMore && !debouncedSearch && activeCategory === 'All' && (
-        <div className="flex justify-center pt-8">
-          <button 
-            onClick={onLoadMore}
-            disabled={loadingMore}
-            className="px-8 py-3 bg-bg-soft border border-border rounded-2xl text-sm font-bold text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loadingMore ? (
-              <>
-                <div className="w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin" />
-                Processing Dispatches...
-              </>
-            ) : (
-              'Load More Artifacts'
-            )}
-          </button>
+      {/* Pagination */}
+      {!debouncedSearch && activeCategory === 'All' && filteredPosts.length > 0 && (
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-8">
+          <p className="text-xs font-black uppercase tracking-widest text-ink-muted">
+            Page {currentPage}
+          </p>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={onPreviousPage}
+              disabled={loadingMore || currentPage === 1}
+              className="px-5 py-3 bg-bg-soft border border-border rounded-2xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Previous
+            </button>
+            <button 
+              onClick={onNextPage}
+              disabled={loadingMore || !hasMore}
+              className="px-5 py-3 bg-bg-soft border border-border rounded-2xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+            >
+              {loadingMore ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin" />
+                  Loading
+                </>
+              ) : (
+                <>
+                  Next
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
     </div>

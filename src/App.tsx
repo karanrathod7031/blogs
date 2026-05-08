@@ -25,6 +25,13 @@ import { cacheStrategy } from './core/scaling/CacheStrategy';
 import { initializeInteractionTracking, trackInteraction } from './services/interactionService';
 
 const BlogEditor = lazy(() => import('./features/blog/components/BlogEditor'));
+const POSTS_PAGE_SIZE = 9;
+
+interface CachedPostsPage {
+  posts: BlogPost[];
+  lastVisible: QueryDocumentSnapshot | null;
+  hasMore: boolean;
+}
 
 function AppContent() {
   const [view, setView] = useState<View>('list');
@@ -47,7 +54,8 @@ function AppContent() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
   const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [pageCache, setPageCache] = useState<CachedPostsPage[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [currentPost, setCurrentPost] = useState<BlogPost | null>(null);
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
@@ -91,17 +99,22 @@ function AppContent() {
     });
   }, [view, prevView]);
 
-  const fetchPosts = useCallback(async (isLoadMore = false) => {
-    if (isLoadMore) setLoadingMore(true);
-    else {
+  const fetchPosts = useCallback(async (targetPage = 1) => {
+    const isPaginating = targetPage > 1 || pageCache.length > 0;
+
+    if (isPaginating) {
+      setLoadingMore(true);
+    } else {
       // Check cache first for initial load to scale to 10,000+ users without DB stress
       if (view === 'list') {
-        const cached = cacheStrategy.get<{ posts: BlogPost[], hasMore: boolean }>('published_posts_v2');
+        const cached = cacheStrategy.get<CachedPostsPage>('published_posts_v2');
         if (cached) {
           setPosts(cached.posts);
           setHasMore(cached.hasMore);
+          setCurrentPage(1);
+          setPageCache([cached]);
           setLoading(false);
-          // Still fetch in background to sync (SWR pattern)
+          return;
         }
       }
       setLoading(true);
@@ -109,21 +122,36 @@ function AppContent() {
 
     try {
       if (view === 'list') {
-        const result = await getPublishedPosts(isLoadMore ? (lastDoc || undefined) : undefined);
-        const newHasMore = result.posts.length === 9;
-
-        if (isLoadMore) {
-          setPosts(prev => [...prev, ...result.posts]);
-        } else {
-          setPosts(result.posts);
-          // Only cache the first page for optimal scaling
-          cacheStrategy.set('published_posts_v2', { 
-            posts: result.posts, 
-            hasMore: newHasMore 
-          });
+        const cachedPage = pageCache[targetPage - 1];
+        if (cachedPage) {
+          setPosts(cachedPage.posts);
+          setHasMore(cachedPage.hasMore);
+          setCurrentPage(targetPage);
+          return;
         }
-        setLastDoc(result.lastVisible);
+
+        const previousPage = pageCache[targetPage - 2];
+        const result = await getPublishedPosts(targetPage === 1 ? undefined : previousPage?.lastVisible || undefined);
+        const newHasMore = result.posts.length === POSTS_PAGE_SIZE;
+        const pageData: CachedPostsPage = {
+          posts: result.posts,
+          lastVisible: result.lastVisible,
+          hasMore: newHasMore
+        };
+
+        setPosts(result.posts);
         setHasMore(newHasMore);
+        setCurrentPage(targetPage);
+        setPageCache((prev) => {
+          const next = [...prev];
+          next[targetPage - 1] = pageData;
+          return next;
+        });
+
+        if (targetPage === 1) {
+          // Only cache the first page for optimal scaling
+          cacheStrategy.set('published_posts_v2', pageData);
+        }
       } else if (view === 'admin' && user) {
         const data = await getAllPostsForUser(user.uid);
         setPosts(data);
@@ -135,19 +163,29 @@ function AppContent() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [view, user, lastDoc, notify]);
+  }, [view, user, notify, pageCache]);
 
   useEffect(() => {
     if (view === 'list' || view === 'admin') {
-      fetchPosts(false);
+      if (view === 'list') {
+        setPageCache([]);
+        setCurrentPage(1);
+      }
+      fetchPosts(1);
     }
   }, [view, user]);
 
-  const handleLoadMore = useCallback(() => {
+  const handleNextPage = useCallback(() => {
     if (!loadingMore && hasMore) {
-      fetchPosts(true);
+      void fetchPosts(currentPage + 1);
     }
-  }, [loadingMore, hasMore, fetchPosts]);
+  }, [loadingMore, hasMore, fetchPosts, currentPage]);
+
+  const handlePreviousPage = useCallback(() => {
+    if (!loadingMore && currentPage > 1) {
+      void fetchPosts(currentPage - 1);
+    }
+  }, [loadingMore, currentPage, fetchPosts]);
 
   const handleSelectPost = useCallback(async (slug: string) => {
     console.log('[App] Selection Request for SLUG:', slug);
@@ -245,8 +283,10 @@ function AppContent() {
             posts={posts} 
             onSelectPost={handleSelectPost} 
             onViewProfile={handleViewProfile}
-            onLoadMore={handleLoadMore}
+            onNextPage={handleNextPage}
+            onPreviousPage={handlePreviousPage}
             hasMore={hasMore}
+            currentPage={currentPage}
             loadingMore={loadingMore}
             loading={loading}
           />
