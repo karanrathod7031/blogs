@@ -25,6 +25,7 @@ import { BlogPost, Comment } from '../types';
 import { requestOrchestrator } from '../core/scaling/RequestOrchestrator';
 
 const COLLECTION_NAME = 'posts';
+const PUBLISHED_POSTS_PAGE_SIZE = 4;
 
 // Interaction Services
 
@@ -121,7 +122,7 @@ export async function getPublishedPosts(lastDoc?: QueryDocumentSnapshot): Promis
       postsRef, 
       where('published', '==', true),
       orderBy('createdAt', 'desc'),
-      limit(9)
+      limit(PUBLISHED_POSTS_PAGE_SIZE)
     );
 
     if (lastDoc) {

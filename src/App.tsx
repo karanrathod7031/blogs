@@ -25,7 +25,7 @@ import { cacheStrategy } from './core/scaling/CacheStrategy';
 import { initializeInteractionTracking, trackInteraction } from './services/interactionService';
 
 const BlogEditor = lazy(() => import('./features/blog/components/BlogEditor'));
-const POSTS_PAGE_SIZE = 9;
+const POSTS_PAGE_SIZE = 4;
 
 interface CachedPostsPage {
   posts: BlogPost[];
@@ -85,28 +85,14 @@ function AppContent() {
     };
   }, [user?.uid]);
 
-  const navTo = useCallback((newView: View) => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
-    
-    // Update history for back button support
-    if (newView !== view) {
-      window.history.pushState({ view: newView }, '');
-    }
-
-    setView(prev => {
-      setPrevView(prev === 'post' || prev === 'profile' ? prevView : prev);
-      return newView;
-    });
-  }, [view, prevView]);
-
-  const fetchPosts = useCallback(async (targetPage = 1) => {
+  const fetchPosts = useCallback(async (targetPage = 1, bypassCache = false) => {
     const isPaginating = targetPage > 1 || pageCache.length > 0;
 
     if (isPaginating) {
       setLoadingMore(true);
     } else {
       // Check cache first for initial load to scale to 10,000+ users without DB stress
-      if (view === 'list') {
+      if (view === 'list' && !bypassCache) {
         const cached = cacheStrategy.get<CachedPostsPage>('published_posts_v2');
         if (cached) {
           setPosts(cached.posts);
@@ -122,7 +108,7 @@ function AppContent() {
 
     try {
       if (view === 'list') {
-        const cachedPage = pageCache[targetPage - 1];
+        const cachedPage = !bypassCache ? pageCache[targetPage - 1] : null;
         if (cachedPage) {
           setPosts(cachedPage.posts);
           setHasMore(cachedPage.hasMore);
@@ -164,6 +150,31 @@ function AppContent() {
       setLoadingMore(false);
     }
   }, [view, user, notify, pageCache]);
+
+  const navTo = useCallback((newView: View) => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+
+    if (newView === 'list') {
+      setCurrentPage(1);
+      setPageCache([]);
+      setHasMore(true);
+      cacheStrategy.invalidate('published_posts_v2');
+
+      if (view === 'list') {
+        void fetchPosts(1, true);
+      }
+    }
+    
+    // Update history for back button support
+    if (newView !== view) {
+      window.history.pushState({ view: newView }, '');
+    }
+
+    setView(prev => {
+      setPrevView(prev === 'post' || prev === 'profile' ? prevView : prev);
+      return newView;
+    });
+  }, [view, prevView, fetchPosts]);
 
   useEffect(() => {
     if (view === 'list' || view === 'admin') {

@@ -137,8 +137,12 @@ export default function BlogList({
   const featuredPost = useMemo(() => posts[0], [posts]);
   
   const regularPosts = useMemo(() => {
-    return filteredPosts.filter(p => !debouncedSearch && activeCategory === 'All' ? p.id !== featuredPost?.id : true);
-  }, [filteredPosts, debouncedSearch, activeCategory, featuredPost]);
+    if (!debouncedSearch && activeCategory === 'All' && currentPage === 1) {
+      return filteredPosts.filter((post) => post.id !== featuredPost?.id);
+    }
+
+    return filteredPosts;
+  }, [filteredPosts, debouncedSearch, activeCategory, featuredPost, currentPage]);
 
   if (loading && posts.length === 0) {
     return (
@@ -155,7 +159,7 @@ export default function BlogList({
         <FeaturedBlogSkeleton />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
+          {[1, 2, 3, 4].map((i) => (
             <BlogCardSkeleton key={i} />
           ))}
         </div>
@@ -219,7 +223,7 @@ export default function BlogList({
       </div>
 
       {/* Featured Section (Only when no search/filter) */}
-      {!debouncedSearch && activeCategory === 'All' && featuredPost && (
+      {!debouncedSearch && activeCategory === 'All' && currentPage === 1 && featuredPost && (
         <motion.section 
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
