@@ -119,6 +119,12 @@ function AppContent() {
         const previousPage = pageCache[targetPage - 2];
         const result = await getPublishedPosts(targetPage === 1 ? undefined : previousPage?.lastVisible || undefined);
         const newHasMore = result.posts.length === POSTS_PAGE_SIZE;
+
+        if (targetPage > 1 && result.posts.length === 0) {
+          setHasMore(false);
+          return;
+        }
+
         const pageData: CachedPostsPage = {
           posts: result.posts,
           lastVisible: result.lastVisible,
@@ -187,10 +193,10 @@ function AppContent() {
   }, [view, user]);
 
   const handleNextPage = useCallback(() => {
-    if (!loadingMore && hasMore) {
+    if (!loadingMore && hasMore && posts.length > 0) {
       void fetchPosts(currentPage + 1);
     }
-  }, [loadingMore, hasMore, fetchPosts, currentPage]);
+  }, [loadingMore, hasMore, fetchPosts, currentPage, posts.length]);
 
   const handlePreviousPage = useCallback(() => {
     if (!loadingMore && currentPage > 1) {
