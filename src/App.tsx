@@ -296,8 +296,10 @@ function AppContent() {
             onViewProfile={handleViewProfile}
             onNextPage={handleNextPage}
             onPreviousPage={handlePreviousPage}
+            onPageSelect={(page) => void fetchPosts(page)}
             hasMore={hasMore}
             currentPage={currentPage}
+            knownPageCount={pageCache.length + (hasMore ? 1 : 0)}
             loadingMore={loadingMore}
             loading={loading}
           />

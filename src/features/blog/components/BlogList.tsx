@@ -13,8 +13,10 @@ interface BlogListProps {
   onViewProfile: (userId: string) => void;
   onNextPage?: () => void;
   onPreviousPage?: () => void;
+  onPageSelect?: (page: number) => void;
   hasMore?: boolean;
   currentPage?: number;
+  knownPageCount?: number;
   loadingMore?: boolean;
   loading?: boolean;
 }
@@ -106,8 +108,10 @@ export default function BlogList({
   onViewProfile,
   onNextPage,
   onPreviousPage,
+  onPageSelect,
   hasMore,
   currentPage = 1,
+  knownPageCount = 1,
   loadingMore,
   loading
 }: BlogListProps) {
@@ -144,6 +148,18 @@ export default function BlogList({
     return filteredPosts;
   }, [filteredPosts, debouncedSearch, activeCategory, featuredPost, currentPage]);
 
+  const visiblePageNumbers = useMemo(() => {
+    const total = Math.max(1, knownPageCount);
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, index) => index + 1);
+    }
+
+    const windowPages = new Set<number>([1, total, currentPage - 1, currentPage, currentPage + 1]);
+    return Array.from(windowPages)
+      .filter((page) => page >= 1 && page <= total)
+      .sort((left, right) => left - right);
+  }, [currentPage, knownPageCount]);
+
   if (loading && posts.length === 0) {
     return (
       <div id="blog-listing" className="space-y-6 md:space-y-12">
@@ -159,7 +175,7 @@ export default function BlogList({
         <FeaturedBlogSkeleton />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3, 4, 5, 6].map((i) => (
             <BlogCardSkeleton key={i} />
           ))}
         </div>
@@ -302,23 +318,44 @@ export default function BlogList({
 
       {/* Pagination */}
       {!debouncedSearch && activeCategory === 'All' && filteredPosts.length > 0 && (
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-8">
+        <div className="flex flex-col items-center gap-4 pt-8">
           <p className="text-xs font-black uppercase tracking-widest text-ink-muted">
             Page {currentPage}
           </p>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <button 
               onClick={onPreviousPage}
               disabled={loadingMore || currentPage === 1}
-              className="px-5 py-3 bg-bg-soft border border-border rounded-2xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2.5 bg-bg-soft border border-border rounded-xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
               Previous
             </button>
+            {visiblePageNumbers.map((page, index) => {
+              const previous = visiblePageNumbers[index - 1];
+              const showGap = previous && page - previous > 1;
+
+              return (
+                <div key={page} className="flex items-center gap-2">
+                  {showGap && <span className="px-1 text-sm font-black text-ink-muted">...</span>}
+                  <button
+                    onClick={() => onPageSelect?.(page)}
+                    disabled={loadingMore || page === currentPage || (page > knownPageCount)}
+                    className={`min-w-11 px-3 py-2.5 rounded-xl text-xs font-black transition-all shadow-sm border cursor-pointer ${
+                      page === currentPage
+                        ? 'bg-accent text-slate-950 border-accent'
+                        : 'bg-bg-soft border-border text-ink-muted hover:border-accent hover:text-accent'
+                    } disabled:opacity-70 disabled:cursor-not-allowed`}
+                  >
+                    {page}
+                  </button>
+                </div>
+              );
+            })}
             <button 
               onClick={onNextPage}
               disabled={loadingMore || !hasMore}
-              className="px-5 py-3 bg-bg-soft border border-border rounded-2xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2.5 bg-bg-soft border border-border rounded-xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
             >
               {loadingMore ? (
                 <>
