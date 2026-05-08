@@ -180,6 +180,44 @@ service cloud.firestore {
         data.currentActiveUsers >= 0;
     }
 
+    function isValidAuditAction(action) {
+      return action == 'suspend_user' ||
+        action == 'restore_user' ||
+        action == 'delete_user' ||
+        action == 'delete_post' ||
+        action == 'refresh_stats';
+    }
+
+    function isValidTargetType(targetType) {
+      return targetType == 'user' ||
+        targetType == 'post' ||
+        targetType == 'system';
+    }
+
+    function isValidAuditLog(logId) {
+      return isValidId(logId) &&
+        incoming().keys().hasOnly([
+          'action',
+          'actorUid',
+          'actorEmail',
+          'actorRole',
+          'targetId',
+          'targetType',
+          'targetLabel',
+          'createdAt'
+        ]) &&
+        isValidAuditAction(incoming().action) &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().actorEmail == request.auth.token.email &&
+        (incoming().actorRole == 'user' || incoming().actorRole == 'admin') &&
+        isValidId(incoming().targetId) &&
+        isValidTargetType(incoming().targetType) &&
+        incoming().targetLabel is string &&
+        incoming().targetLabel.size() >= 1 &&
+        incoming().targetLabel.size() <= 200 &&
+        incoming().createdAt is timestamp;
+    }
+
     function isValidPost(data) {
       return data.keys().hasOnly([
           'title',
@@ -353,6 +391,12 @@ service cloud.firestore {
           isValidPublicInteractionIncrement()
         );
       allow delete: if isMasterAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin() && isValidAuditLog(logId);
+      allow update, delete: if false;
     }
 
     match /{document=**} {

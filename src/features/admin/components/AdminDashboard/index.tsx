@@ -13,7 +13,7 @@ import {
   CalendarClock,
 } from 'lucide-react';
 import { ActiveUserRecord, adminService } from '../../../../services/adminService';
-import { UserProfile, BlogPost, AppStats } from '../../../../types';
+import { AdminAuditLog, UserProfile, BlogPost, AppStats } from '../../../../types';
 import { useAuthState } from '../../../../hooks/useAuthState';
 import { StatCard } from './StatCard';
 import { SystemPulse } from './SystemPulse';
@@ -24,6 +24,7 @@ import { ConfirmationModal } from '../../../../components/ui/ConfirmationModal';
 import { AnonymousActivityCard } from './AnonymousActivityCard';
 import { ActiveUserRecordsCard } from './ActiveUserRecordsCard';
 import { UserActivityLogChart } from './UserActivityLogChart';
+import { AdminAuditLogCard } from './AdminAuditLogCard';
 
 interface AdminDashboardProps {
   onViewPost: (slug: string) => void;
@@ -76,6 +77,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   const [statsState, setStatsState] = useState<ResourceState<AppStats>>({ status: 'idle', data: null });
   const [anonymousState, setAnonymousState] = useState<ResourceState<AnonymousActivityStats>>({ status: 'idle', data: null });
   const [activeRecordsState, setActiveRecordsState] = useState<ResourceState<ActiveUserRecord[]>>({ status: 'idle', data: null });
+  const [auditLogsState, setAuditLogsState] = useState<ResourceState<AdminAuditLog[]>>({ status: 'idle', data: null });
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'posts'>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -90,6 +92,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   const users = usersState.data || [];
   const posts = postsState.data || [];
   const activeRecords = activeRecordsState.data || [];
+  const auditLogs = auditLogsState.data || [];
   const overviewStats: Partial<Record<keyof AppStats, number | null>> = {
     totalUsers: statsState.status === 'ready' ? (statsState.data?.totalUsers ?? 0) : null,
     totalPosts: statsState.status === 'ready' ? (statsState.data?.totalPosts ?? 0) : null,
@@ -184,6 +187,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
     }
   };
 
+  const fetchAuditLogs = async (silent = false) => {
+    if (!silent || !auditLogsState.data) {
+      setAuditLogsState((prev) => ({ ...prev, status: 'loading' }));
+    }
+
+    try {
+      const records = await adminService.getRecentAuditLogs();
+      setAuditLogsState({ status: 'ready', data: records });
+    } catch (error) {
+      console.error('Failed to fetch admin audit logs:', error);
+      setAuditLogsState((prev) => ({ status: 'error', data: prev.data }));
+      notify(`Admin audit sync failed: ${getErrorMessage(error)}`, 'error');
+    }
+  };
+
   const fetchData = async (silent = false) => {
     if (authLoading) return;
 
@@ -193,6 +211,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
       setStatsState((prev) => ({ ...prev, status: 'idle' }));
       setAnonymousState((prev) => ({ ...prev, status: 'idle' }));
       setActiveRecordsState((prev) => ({ ...prev, status: 'idle' }));
+      setAuditLogsState((prev) => ({ ...prev, status: 'idle' }));
       return;
     }
 
@@ -200,7 +219,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
       await Promise.all([
         fetchStats(silent),
         fetchAnonymous(silent),
-        fetchActiveRecords(silent)
+        fetchActiveRecords(silent),
+        fetchAuditLogs(silent)
       ]);
       return;
     }
@@ -364,7 +384,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
 
   const isBootstrapping = !authLoading && isAdmin && (
     activeTab === 'overview'
-      ? [statsState.status, anonymousState.status, activeRecordsState.status].every((status) => status === 'idle' || status === 'loading')
+      ? [statsState.status, anonymousState.status, activeRecordsState.status, auditLogsState.status].every((status) => status === 'idle' || status === 'loading')
       : activeTab === 'users'
         ? (usersState.status === 'idle' || usersState.status === 'loading')
         : [usersState.status, postsState.status].every((status) => status === 'idle' || status === 'loading')
@@ -457,6 +477,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
                 status={anonymousState.status === 'error' ? 'error' : anonymousState.status === 'loading' ? 'loading' : 'ready'}
               />
               <ActiveUserRecordsCard records={activeRecords} />
+              <AdminAuditLogCard
+                logs={auditLogs}
+                status={auditLogsState.status === 'error' ? 'error' : auditLogsState.status === 'loading' ? 'loading' : 'ready'}
+              />
               <SecurityStatusCard status={{
                 users: usersState.status,
                 posts: postsState.status,

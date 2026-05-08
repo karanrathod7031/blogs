@@ -1,10 +1,11 @@
-import { collection, getDocs, doc, updateDoc, getDoc, setDoc, query, orderBy, limit, deleteDoc, serverTimestamp, where } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { UserProfile, BlogPost, AppStats } from '../types';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
+import { AdminAuditAction, AdminAuditLog, UserProfile, BlogPost, AppStats } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 
 const PRESENCE_COLLECTION_NAME = 'presence';
 const ACTIVE_USER_WINDOW_MS = 5 * 60 * 1000;
+const AUDIT_LOG_COLLECTION_NAME = 'auditLogs';
 
 export interface ActiveUserRecord {
   uid: string;
@@ -12,6 +13,38 @@ export interface ActiveUserRecord {
   email: string;
   role: 'user' | 'admin';
   lastSeenAt: number;
+}
+
+function getActorRole(): 'user' | 'admin' {
+  return auth.currentUser?.email === 'rk.upk2345678@gmail.com' ? 'admin' : 'user';
+}
+
+async function createAuditLog(entry: {
+  action: AdminAuditAction;
+  targetId: string;
+  targetType: 'user' | 'post' | 'system';
+  targetLabel: string;
+}) {
+  const actor = auth.currentUser;
+
+  if (!actor?.uid || !actor.email) {
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, AUDIT_LOG_COLLECTION_NAME), {
+      action: entry.action,
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: getActorRole(),
+      targetId: entry.targetId,
+      targetType: entry.targetType,
+      targetLabel: entry.targetLabel,
+      createdAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('[adminService] Failed to write audit log:', error);
+  }
 }
 
 function createEmptyStats(): AppStats {
@@ -84,6 +117,25 @@ async function getPresenceStats() {
 }
 
 export const adminService = {
+  async getRecentAuditLogs(): Promise<AdminAuditLog[]> {
+    try {
+      const snapshot = await getDocs(
+        query(
+          collection(db, AUDIT_LOG_COLLECTION_NAME),
+          orderBy('createdAt', 'desc'),
+          limit(10)
+        )
+      );
+
+      return snapshot.docs.map((entry) => ({
+        id: entry.id,
+        ...entry.data()
+      } as AdminAuditLog));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, AUDIT_LOG_COLLECTION_NAME);
+    }
+  },
+
   async getRecentActiveUsers(): Promise<ActiveUserRecord[]> {
     try {
       const snapshot = await getDocs(
@@ -154,9 +206,18 @@ export const adminService = {
     console.log(`[adminService] Toggling suspension for: users/${userId} to ${!currentlySuspended}`);
     try {
       const userRef = doc(db, 'users', userId);
+      const userSnapshot = await getDoc(userRef);
       await updateDoc(userRef, {
         suspended: !currentlySuspended,
         updatedAt: serverTimestamp()
+      });
+      await createAuditLog({
+        action: currentlySuspended ? 'restore_user' : 'suspend_user',
+        targetId: userId,
+        targetType: 'user',
+        targetLabel: userSnapshot.exists()
+          ? ((userSnapshot.data().displayName as string | undefined) || (userSnapshot.data().email as string | undefined) || userId)
+          : userId
       });
       console.log(`[adminService] Successfully updated suspension status for: users/${userId}`);
     } catch (error: unknown) {
@@ -170,7 +231,16 @@ export const adminService = {
     console.log(`[adminService] Attempting to delete user metadata: users/${userId}`);
     try {
       const userRef = doc(db, 'users', userId);
+      const userSnapshot = await getDoc(userRef);
       await deleteDoc(userRef);
+      await createAuditLog({
+        action: 'delete_user',
+        targetId: userId,
+        targetType: 'user',
+        targetLabel: userSnapshot.exists()
+          ? ((userSnapshot.data().displayName as string | undefined) || (userSnapshot.data().email as string | undefined) || userId)
+          : userId
+      });
       console.log(`[adminService] Successfully purged user: users/${userId}`);
     } catch (error: unknown) {
       console.error(`[adminService] FAILED to delete user: users/${userId}`, error);
@@ -183,7 +253,16 @@ export const adminService = {
     console.log(`[adminService] Attempting to delete document: posts/${postId}`);
     try {
       const postRef = doc(db, 'posts', postId);
+      const postSnapshot = await getDoc(postRef);
       await deleteDoc(postRef);
+      await createAuditLog({
+        action: 'delete_post',
+        targetId: postId,
+        targetType: 'post',
+        targetLabel: postSnapshot.exists()
+          ? ((postSnapshot.data().title as string | undefined) || postId)
+          : postId
+      });
       console.log(`[adminService] Successfully deleted document: posts/${postId}`);
     } catch (error: unknown) {
       console.error(`[adminService] FAILED to delete document: posts/${postId}`, error);
@@ -264,6 +343,12 @@ export const adminService = {
       };
 
       await setDoc(statsRef, stats);
+      await createAuditLog({
+        action: 'refresh_stats',
+        targetId: 'stats',
+        targetType: 'system',
+        targetLabel: 'System statistics'
+      });
       return stats;
     } catch (error) {
       console.error('[AdminService] refreshStats failed:', error);

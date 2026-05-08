@@ -64,6 +64,25 @@ export interface AppStats {
   currentActiveUsers: number;
 }
 
+export type AdminAuditAction =
+  | 'suspend_user'
+  | 'restore_user'
+  | 'delete_user'
+  | 'delete_post'
+  | 'refresh_stats';
+
+export interface AdminAuditLog {
+  id: string;
+  action: AdminAuditAction;
+  actorUid: string;
+  actorEmail: string;
+  actorRole: 'user' | 'admin';
+  targetId: string;
+  targetType: 'user' | 'post' | 'system';
+  targetLabel: string;
+  createdAt?: Timestamp;
+}
+
 export interface PostView {
   id: string;
   postId: string;
