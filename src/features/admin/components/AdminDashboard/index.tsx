@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   Users, 
@@ -26,6 +26,7 @@ import { ActiveUserRecordsCard } from './ActiveUserRecordsCard';
 import { UserActivityLogChart } from './UserActivityLogChart';
 import { AdminAuditLogCard } from './AdminAuditLogCard';
 import { AuditHistoryTable } from './AuditHistoryTable';
+import { SuspiciousActivityAlert, SuspiciousActivityAlertsCard } from './SuspiciousActivityAlertsCard';
 
 interface AdminDashboardProps {
   onViewPost: (slug: string) => void;
@@ -49,6 +50,8 @@ interface AnonymousActivityStats {
 }
 
 const ROOT_ADMIN_EMAIL = 'rk.upk2345678@gmail.com';
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -69,6 +72,82 @@ function sortUsersWithAdminFirst(list: UserProfile[]): UserProfile[] {
     const rightCreated = right.createdAt && 'toMillis' in right.createdAt ? right.createdAt.toMillis() : 0;
     return rightCreated - leftCreated;
   }).map((entry) => entry.email === ROOT_ADMIN_EMAIL ? { ...entry, role: 'admin' } : entry);
+}
+
+function buildSuspiciousAlerts(args: {
+  auditLogs: AdminAuditLog[];
+  anonymous: AnonymousActivityStats | null;
+  stats: AppStats | null;
+}): SuspiciousActivityAlert[] {
+  const alerts: SuspiciousActivityAlert[] = [];
+  const now = Date.now();
+  const recentAuditLogs = args.auditLogs.filter((log) => {
+    const createdAt = log.createdAt?.toDate().getTime();
+    return typeof createdAt === 'number' && createdAt >= now - ONE_DAY_MS;
+  });
+
+  const destructiveLogs = recentAuditLogs.filter((log) =>
+    log.action === 'delete_post' || log.action === 'delete_user' || log.action === 'suspend_user'
+  );
+
+  const lastHourDestructiveCount = destructiveLogs.filter((log) => {
+    const createdAt = log.createdAt?.toDate().getTime();
+    return typeof createdAt === 'number' && createdAt >= now - ONE_HOUR_MS;
+  }).length;
+
+  if (lastHourDestructiveCount >= 3) {
+    alerts.push({
+      id: 'destructive-spike',
+      severity: 'high',
+      title: 'Rapid destructive admin actions',
+      description: `${lastHourDestructiveCount} delete or suspension actions were recorded in the last hour.`,
+      source: 'Audit logs / last hour'
+    });
+  }
+
+  const destructiveByActor = destructiveLogs.reduce<Record<string, number>>((acc, log) => {
+    acc[log.actorEmail] = (acc[log.actorEmail] || 0) + 1;
+    return acc;
+  }, {});
+
+  const topActor = Object.entries(destructiveByActor).sort((left, right) => right[1] - left[1])[0];
+  if (topActor && topActor[1] >= 4) {
+    alerts.push({
+      id: 'actor-spike',
+      severity: 'medium',
+      title: 'Single actor triggered repeated enforcement',
+      description: `${topActor[0]} performed ${topActor[1]} destructive actions in the last 24 hours.`,
+      source: 'Audit logs / actor clustering'
+    });
+  }
+
+  if (args.anonymous && args.stats) {
+    const signedCurrent = args.stats.currentActiveUsers;
+    const anonymousCurrent = args.anonymous.currentActive;
+    const anonymousToday = args.anonymous.todayActive;
+
+    if (anonymousCurrent >= 10 || (anonymousCurrent >= 5 && anonymousCurrent > Math.max(1, signedCurrent) * 3)) {
+      alerts.push({
+        id: 'anonymous-live-spike',
+        severity: anonymousCurrent >= 10 ? 'high' : 'medium',
+        title: 'Anonymous live traffic spike',
+        description: `${anonymousCurrent} anonymous visitors are active right now versus ${signedCurrent} signed-in users.`,
+        source: 'Anonymous presence telemetry'
+      });
+    }
+
+    if (anonymousToday >= 40) {
+      alerts.push({
+        id: 'anonymous-daily-volume',
+        severity: 'low',
+        title: 'Elevated anonymous daily traffic',
+        description: `${anonymousToday} anonymous sessions were tracked today. Review if this traffic pattern is expected.`,
+        source: 'Anonymous daily telemetry'
+      });
+    }
+  }
+
+  return alerts;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) => {
@@ -95,6 +174,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   const posts = postsState.data || [];
   const activeRecords = activeRecordsState.data || [];
   const auditLogs = auditLogsState.data || [];
+  const suspiciousAlerts = useMemo(
+    () => buildSuspiciousAlerts({
+      auditLogs,
+      anonymous: anonymousState.data,
+      stats: statsState.data
+    }),
+    [anonymousState.data, auditLogs, statsState.data]
+  );
   const overviewStats: Partial<Record<keyof AppStats, number | null>> = {
     totalUsers: statsState.status === 'ready' ? (statsState.data?.totalUsers ?? 0) : null,
     totalPosts: statsState.status === 'ready' ? (statsState.data?.totalPosts ?? 0) : null,
@@ -481,6 +568,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
             </div>
 
             <div className="xl:col-span-4 space-y-6">
+              <SuspiciousActivityAlertsCard alerts={suspiciousAlerts} />
               <AnonymousActivityCard
                 todayActive={anonymousState.status === 'ready' ? (anonymousState.data?.todayActive ?? 0) : null}
                 currentActive={anonymousState.status === 'ready' ? (anonymousState.data?.currentActive ?? 0) : null}
