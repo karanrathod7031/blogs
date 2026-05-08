@@ -40,6 +40,8 @@ import { TableRow as TiptapTableRow } from '@tiptap/extension-table-row';
 import { TableHeader as TiptapTableHeader } from '@tiptap/extension-table-header';
 import { TableCell as TiptapTableCell } from '@tiptap/extension-table-cell';
 import { TextAlign } from '@tiptap/extension-text-align';
+import { auth } from '../../../lib/firebase';
+import { uploadOptimizedImage } from '../../../services/storageService';
 
 interface BlogEditorProps {
   post?: BlogPost;
@@ -81,60 +83,40 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Basic pre-check: If raw file > 5MB, reject immediately
       if (file.size > 5 * 1024 * 1024) {
         onNotify("Image file is too large. Please select an image under 5MB.", 'error');
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        onNotify('You must be signed in to upload images.', 'error');
+        return;
+      }
 
-          // Max dimensions for header image
-          const MAX_WIDTH = 1200;
-          const MAX_HEIGHT = 800;
+      setUploadingCoverImage(true);
+      try {
+        const imageUrl = await uploadOptimizedImage(file, {
+          folder: `posts/${currentUser.uid}/covers`,
+          maxWidth: 1200,
+          maxHeight: 800,
+          quality: 0.7
+        });
 
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-
-          // Quality 0.7 usually keeps images well under 500KB even at 1200px
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          
-          // Safety check: Firestore limit is 1MB total. 
-          // We aim for 700KB max for the image to leave room for text.
-          if (dataUrl.length > 800000) {
-             // If still too large, try a lower quality
-             const compressedUrl = canvas.toDataURL('image/jpeg', 0.5);
-             setCoverImage(compressedUrl);
-          } else {
-            setCoverImage(dataUrl);
-          }
-        };
-        img.src = event.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+        setCoverImage(imageUrl);
+        onNotify('Header image uploaded successfully.', 'success');
+      } catch (error) {
+        console.error('Cover image upload failed:', error);
+        onNotify('Failed to upload header image.', 'error');
+      } finally {
+        setUploadingCoverImage(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
     }
   };
 
@@ -147,6 +129,7 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
+  const [uploadingCoverImage, setUploadingCoverImage] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -611,16 +594,18 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
                         <input 
                           value={coverImage}
                           onChange={e => setCoverImage(e.target.value)}
-                          placeholder="Image URL"
+                          placeholder={uploadingCoverImage ? 'Uploading image...' : 'Image URL'}
                           className="flex-1 bg-bg border border-border rounded-xl px-4 py-2.5 text-xs font-bold outline-none text-ink"
+                          disabled={uploadingCoverImage}
                         />
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="px-4 bg-bg-soft hover:bg-card text-ink-muted rounded-xl transition-colors cursor-pointer border border-border"
+                          disabled={uploadingCoverImage}
+                          className="px-4 bg-bg-soft hover:bg-card text-ink-muted rounded-xl transition-colors cursor-pointer border border-border disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Upload image"
                         >
-                          <Upload className="w-3.5 h-3.5" />
+                          {uploadingCoverImage ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                         </button>
                       </div>
                       <input 
@@ -744,10 +729,10 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
 
                     <button 
                       type="submit"
-                      disabled={saving}
+                      disabled={saving || uploadingCoverImage}
                       className="w-full bg-accent text-slate-900 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all disabled:opacity-50 active:scale-95"
                     >
-                      {saving ? 'Saving...' : 'Publish Entry'}
+                      {uploadingCoverImage ? 'Uploading image...' : saving ? 'Saving...' : 'Publish Entry'}
                     </button>
 
                     {post && onDelete && (

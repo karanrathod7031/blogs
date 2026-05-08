@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getFirestore, setLogLevel } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 // Firebase configuration from environment variables (for Vercel/Production)
 // Fallback values can be found in firebase-applet-config.json if running locally
@@ -22,6 +23,7 @@ if (!import.meta.env.DEV) {
 
 export const db = getFirestore(app, config.firestoreDatabaseId);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);

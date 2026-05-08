@@ -4,5 +4,8 @@
       "database": "ai-studio-6eeea2a4-7289-4131-b58b-1680b5cb39a4",
       "rules": "firestore.rules"
     }
-  ]
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  }
 }

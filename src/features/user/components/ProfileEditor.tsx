@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../../lib/firebase';
 import { UserProfile } from '../../../types';
 import { handleFirestoreError, OperationType } from '../../../lib/firestore-utils';
+import { uploadOptimizedImage } from '../../../services/storageService';
 
 interface ProfileEditorProps {
   onNotify: (message: string, type: 'success' | 'error') => void;
@@ -21,6 +22,7 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingProfileImage, setUploadingProfileImage] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -36,7 +38,7 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleDPUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDPUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
@@ -44,33 +46,33 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          // Square target for DP
-          const SIZE = 400;
-          const sourceWidth = img.width;
-          const sourceHeight = img.height;
-          
-          canvas.width = SIZE;
-          canvas.height = SIZE;
-          const ctx = canvas.getContext('2d');
-          
-          // Center crop to square
-          const minDim = Math.min(sourceWidth, sourceHeight);
-          const sx = (sourceWidth - minDim) / 2;
-          const sy = (sourceHeight - minDim) / 2;
-          
-          ctx?.drawImage(img, sx, sy, minDim, minDim, 0, 0, SIZE, SIZE);
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        onNotify('You must be signed in to upload images.', 'error');
+        return;
+      }
 
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          setProfile(prev => ({ ...prev, photoURL: dataUrl }));
-        };
-        img.src = event.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+      setUploadingProfileImage(true);
+      try {
+        const imageUrl = await uploadOptimizedImage(file, {
+          folder: `users/${currentUser.uid}/profile`,
+          maxWidth: 400,
+          maxHeight: 400,
+          square: true,
+          quality: 0.8
+        });
+
+        setProfile(prev => ({ ...prev, photoURL: imageUrl }));
+        onNotify('Profile image uploaded successfully.', 'success');
+      } catch (error) {
+        console.error('Profile image upload failed:', error);
+        onNotify('Failed to upload profile image.', 'error');
+      } finally {
+        setUploadingProfileImage(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
     }
   };
 
@@ -193,12 +195,14 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
                   <button
                     type="button"
                     onClick={() => {
+                      if (uploadingProfileImage) return;
                       fileInputRef.current?.click();
                       setShowMenu(false);
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-ink-muted hover:bg-bg-soft transition-colors"
+                    disabled={uploadingProfileImage}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-ink-muted hover:bg-bg-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Upload className="w-4 h-4 text-purple-500" /> Change Profile
+                    {uploadingProfileImage ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Upload className="w-4 h-4 text-purple-500" />} Change Profile
                   </button>
                 </motion.div>
               )}
@@ -242,7 +246,8 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
                   value={profile.photoURL}
                   onChange={e => setProfile({...profile, photoURL: e.target.value})}
                   className="flex-1 bg-bg border border-border rounded-xl px-4 py-3 text-sm font-bold focus:bg-bg-soft focus:border-accent outline-none transition-all text-ink placeholder:text-ink-muted/30"
-                  placeholder="Paste URL or click avatar to upload"
+                  placeholder={uploadingProfileImage ? 'Uploading image...' : 'Paste URL or click avatar to upload'}
+                  disabled={uploadingProfileImage}
                 />
               </div>
             </div>
@@ -264,10 +269,10 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
 
         <button 
           type="submit"
-          disabled={saving}
+          disabled={saving || uploadingProfileImage}
           className="w-full flex items-center justify-center gap-3 bg-accent text-slate-900 py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-accent/90 transition-all active:scale-95 disabled:opacity-50 shadow-xl shadow-accent/10"
         >
-          {saving ? (
+          {saving || uploadingProfileImage ? (
             <div className="w-4 h-4 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />
           ) : (
             <>
