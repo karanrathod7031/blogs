@@ -127,7 +127,10 @@ export const AdminAuditLogCard: React.FC<AdminAuditLogCardProps> = ({ logs, stat
           {logs.length === 0 ? 'No administrative actions recorded yet.' : 'No audit entries match the current filter.'}
         </p>
       ) : (
-        <div className="space-y-3">
+        <div
+          className="max-h-[30rem] space-y-3 overflow-y-auto pr-2"
+          style={{ scrollbarWidth: 'thin' }}
+        >
           {filteredLogs.map((log) => {
             const action = getActionCopy(log.action);
             const ActionIcon = action.icon;
