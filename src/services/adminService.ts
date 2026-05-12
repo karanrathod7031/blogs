@@ -1,191 +1,9 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
-import { AdminAuditAction, AdminAuditLog, UserProfile, BlogPost, AppStats } from '../types';
+import { collection, getDocs, doc, updateDoc, getDoc, setDoc, query, orderBy, limit, deleteDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { UserProfile, BlogPost, AppStats } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-utils';
 
-const PRESENCE_COLLECTION_NAME = 'presence';
-const ACTIVE_USER_WINDOW_MS = 5 * 60 * 1000;
-const AUDIT_LOG_COLLECTION_NAME = 'auditLogs';
-
-export interface ActiveUserRecord {
-  uid: string;
-  displayName: string;
-  email: string;
-  role: 'user' | 'admin';
-  lastSeenAt: number;
-}
-
-function getActorRole(): 'user' | 'admin' {
-  return auth.currentUser?.email === 'rk.upk2345678@gmail.com' ? 'admin' : 'user';
-}
-
-async function createAuditLog(entry: {
-  action: AdminAuditAction;
-  targetId: string;
-  targetType: 'user' | 'post' | 'system';
-  targetLabel: string;
-}) {
-  const actor = auth.currentUser;
-
-  if (!actor?.uid || !actor.email) {
-    return;
-  }
-
-  try {
-    await addDoc(collection(db, AUDIT_LOG_COLLECTION_NAME), {
-      action: entry.action,
-      actorUid: actor.uid,
-      actorEmail: actor.email,
-      actorRole: getActorRole(),
-      targetId: entry.targetId,
-      targetType: entry.targetType,
-      targetLabel: entry.targetLabel,
-      createdAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error('[adminService] Failed to write audit log:', error);
-  }
-}
-
-function createEmptyStats(): AppStats {
-  return {
-    totalPosts: 0,
-    totalViews: 0,
-    totalUsers: 0,
-    totalLikes: 0,
-    totalComments: 0,
-    totalInteractions: 0,
-    todayActiveUsers: 0,
-    currentActiveUsers: 0
-  };
-}
-
-function getTodayKey(date = new Date()): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function hasErrorCode(error: unknown, code: string): boolean {
-  return typeof error === 'object'
-    && error !== null
-    && 'code' in error
-    && (error as { code?: string }).code === code;
-}
-
-async function getPresenceStats() {
-  try {
-    const [todayUserResult, currentUserResult] = await Promise.allSettled([
-      getDocs(
-        query(collection(db, 'users'), where('lastActiveDayKey', '==', getTodayKey()))
-      ),
-      getDocs(
-        query(
-          collection(db, 'users'),
-          where('lastSeenAt', '>=', Date.now() - ACTIVE_USER_WINDOW_MS)
-        )
-      )
-    ]);
-
-    if (todayUserResult.status === 'fulfilled' || currentUserResult.status === 'fulfilled') {
-      return {
-        todayActiveUsers: todayUserResult.status === 'fulfilled' ? todayUserResult.value.size : 0,
-        currentActiveUsers: currentUserResult.status === 'fulfilled' ? currentUserResult.value.size : 0
-      };
-    }
-
-    const [todayPresenceResult, currentPresenceResult] = await Promise.allSettled([
-      getDocs(
-        query(collection(db, PRESENCE_COLLECTION_NAME), where('dayKey', '==', getTodayKey()))
-      ),
-      getDocs(
-        query(
-          collection(db, PRESENCE_COLLECTION_NAME),
-          where('lastSeenAt', '>=', Date.now() - ACTIVE_USER_WINDOW_MS)
-        )
-      )
-    ]);
-
-    return {
-      todayActiveUsers: todayPresenceResult.status === 'fulfilled' ? todayPresenceResult.value.size : 0,
-      currentActiveUsers: currentPresenceResult.status === 'fulfilled' ? currentPresenceResult.value.size : 0
-    };
-  } catch {
-    return {
-      todayActiveUsers: 0,
-      currentActiveUsers: 0
-    };
-  }
-}
-
 export const adminService = {
-  async getAuditLogs(limitCount = 100): Promise<AdminAuditLog[]> {
-    try {
-      const snapshot = await getDocs(
-        query(
-          collection(db, AUDIT_LOG_COLLECTION_NAME),
-          orderBy('createdAt', 'desc'),
-          limit(limitCount)
-        )
-      );
-
-      return snapshot.docs.map((entry) => ({
-        id: entry.id,
-        ...entry.data()
-      } as AdminAuditLog));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, AUDIT_LOG_COLLECTION_NAME);
-    }
-  },
-
-  async getRecentAuditLogs(): Promise<AdminAuditLog[]> {
-    return this.getAuditLogs(10);
-  },
-
-  async getRecentActiveUsers(): Promise<ActiveUserRecord[]> {
-    try {
-      const snapshot = await getDocs(
-        query(
-          collection(db, 'users'),
-          where('lastSeenAt', '>=', Date.now() - (24 * 60 * 60 * 1000)),
-          orderBy('lastSeenAt', 'desc'),
-          limit(6)
-        )
-      );
-
-      return snapshot.docs
-        .map((entry) => ({ uid: entry.id, ...entry.data() } as UserProfile))
-        .filter((entry) => typeof entry.lastSeenAt === 'number')
-        .map((entry) => ({
-          uid: entry.uid,
-          displayName: entry.displayName,
-          email: entry.email,
-          role: entry.role,
-          lastSeenAt: entry.lastSeenAt as number
-        }));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'users');
-    }
-  },
-
-  async getAnonymousActivityStats() {
-    try {
-      const snapshot = await getDocs(query(collection(db, PRESENCE_COLLECTION_NAME), limit(250)));
-      const todayKey = getTodayKey();
-      const activeThreshold = Date.now() - ACTIVE_USER_WINDOW_MS;
-
-      const anonymousSessions = snapshot.docs
-        .map(doc => doc.data() as { userId?: string | null; dayKey?: string; lastSeenAt?: number })
-        .filter(entry => !entry.userId);
-
-      return {
-        todayActive: anonymousSessions.filter(entry => entry.dayKey === todayKey).length,
-        currentActive: anonymousSessions.filter(entry => typeof entry.lastSeenAt === 'number' && entry.lastSeenAt >= activeThreshold).length,
-        recentSessions: anonymousSessions.length
-      };
-    } catch {
-      return null;
-    }
-  },
-
   async getAllUsers(): Promise<UserProfile[]> {
     try {
       const q = query(collection(db, 'users'), limit(100)); // Limit for performance
@@ -209,22 +27,14 @@ export const adminService = {
   async toggleUserSuspension(userId: string, currentlySuspended: boolean) {
     console.log(`[adminService] Toggling suspension for: users/${userId} to ${!currentlySuspended}`);
     try {
+      const { serverTimestamp } = await import('firebase/firestore');
       const userRef = doc(db, 'users', userId);
-      const userSnapshot = await getDoc(userRef);
       await updateDoc(userRef, {
         suspended: !currentlySuspended,
         updatedAt: serverTimestamp()
       });
-      await createAuditLog({
-        action: currentlySuspended ? 'restore_user' : 'suspend_user',
-        targetId: userId,
-        targetType: 'user',
-        targetLabel: userSnapshot.exists()
-          ? ((userSnapshot.data().displayName as string | undefined) || (userSnapshot.data().email as string | undefined) || userId)
-          : userId
-      });
       console.log(`[adminService] Successfully updated suspension status for: users/${userId}`);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error(`[adminService] FAILED to toggle suspension for: users/${userId}`, error);
       handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
       throw error;
@@ -235,18 +45,9 @@ export const adminService = {
     console.log(`[adminService] Attempting to delete user metadata: users/${userId}`);
     try {
       const userRef = doc(db, 'users', userId);
-      const userSnapshot = await getDoc(userRef);
       await deleteDoc(userRef);
-      await createAuditLog({
-        action: 'delete_user',
-        targetId: userId,
-        targetType: 'user',
-        targetLabel: userSnapshot.exists()
-          ? ((userSnapshot.data().displayName as string | undefined) || (userSnapshot.data().email as string | undefined) || userId)
-          : userId
-      });
       console.log(`[adminService] Successfully purged user: users/${userId}`);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error(`[adminService] FAILED to delete user: users/${userId}`, error);
       handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);
       throw error;
@@ -257,21 +58,12 @@ export const adminService = {
     console.log(`[adminService] Attempting to delete document: posts/${postId}`);
     try {
       const postRef = doc(db, 'posts', postId);
-      const postSnapshot = await getDoc(postRef);
       await deleteDoc(postRef);
-      await createAuditLog({
-        action: 'delete_post',
-        targetId: postId,
-        targetType: 'post',
-        targetLabel: postSnapshot.exists()
-          ? ((postSnapshot.data().title as string | undefined) || postId)
-          : postId
-      });
       console.log(`[adminService] Successfully deleted document: posts/${postId}`);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error(`[adminService] FAILED to delete document: posts/${postId}`, error);
       // Extra check for permission denied specifically
-      if (hasErrorCode(error, 'permission-denied')) {
+      if (error.code === 'permission-denied') {
         console.error('[adminService] Permission Denied. Check if your account is root admin and email is verified.');
       }
       handleFirestoreError(error, OperationType.DELETE, `posts/${postId}`);
@@ -281,34 +73,20 @@ export const adminService = {
 
   async getAppStats(): Promise<AppStats> {
     try {
-      const [presenceStats, statsDocResult] = await Promise.allSettled([
-        getPresenceStats(),
-        getDoc(doc(db, 'system', 'stats'))
-      ]);
-
-      const safePresenceStats = presenceStats.status === 'fulfilled'
-        ? presenceStats.value
-        : { todayActiveUsers: 0, currentActiveUsers: 0 };
-
-      if (statsDocResult.status === 'fulfilled' && statsDocResult.value.exists()) {
-        return {
-          ...createEmptyStats(),
-          ...(statsDocResult.value.data() as Partial<AppStats>),
-          ...safePresenceStats
-        };
+      const statsDoc = await getDoc(doc(db, 'system', 'stats'));
+      if (statsDoc.exists()) {
+        return statsDoc.data() as AppStats;
       }
-
-      if (statsDocResult.status === 'fulfilled') {
-        return {
-          ...createEmptyStats(),
-          ...safePresenceStats
-        };
-      }
-
-      return {
-        ...createEmptyStats(),
-        ...safePresenceStats
+      
+      // Initial stats if none exist
+      const initialStats: AppStats = {
+        totalPosts: 0,
+        totalViews: 0,
+        totalUsers: 0,
+        totalLikes: 0,
+        totalComments: 0
       };
+      return initialStats;
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'system/stats');
     }
@@ -316,13 +94,8 @@ export const adminService = {
 
   async refreshStats() {
     try {
-      const statsRef = doc(db, 'system', 'stats');
-      const [usersSnap, postsSnap, existingStatsResult, presenceStats] = await Promise.all([
-        getDocs(collection(db, 'users')),
-        getDocs(collection(db, 'posts')),
-        getDoc(statsRef).catch(() => null),
-        getPresenceStats()
-      ]);
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const postsSnap = await getDocs(collection(db, 'posts'));
       
       let totalViews = 0;
       let totalLikes = 0;
@@ -338,21 +111,10 @@ export const adminService = {
         totalPosts: postsSnap.size,
         totalComments: 0, // Simplified or separate fetch
         totalViews,
-        totalLikes,
-        totalInteractions: existingStatsResult?.exists()
-          ? (existingStatsResult.data().totalInteractions as number | undefined) || 0
-          : 0,
-        todayActiveUsers: presenceStats.todayActiveUsers,
-        currentActiveUsers: presenceStats.currentActiveUsers
+        totalLikes
       };
 
-      await setDoc(statsRef, stats);
-      await createAuditLog({
-        action: 'refresh_stats',
-        targetId: 'stats',
-        targetType: 'system',
-        targetLabel: 'System statistics'
-      });
+      await setDoc(doc(db, 'system', 'stats'), stats);
       return stats;
     } catch (error) {
       console.error('[AdminService] refreshStats failed:', error);

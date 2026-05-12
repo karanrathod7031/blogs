@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Layout from './components/layout/Layout';
 import BlogList from './features/blog/components/BlogList';
 import BlogPostView from './features/blog/components/BlogPost';
+import BlogEditor from './features/blog/components/BlogEditor';
 import Dashboard from './features/user/components/Dashboard';
 import PublicProfile from './features/user/components/PublicProfile';
 import { AdminDashboard } from './features/admin/components/AdminDashboard';
@@ -22,16 +23,6 @@ import { RestrictedAccess } from './features/user/components/auth/RestrictedAcce
 import { QueryDocumentSnapshot } from 'firebase/firestore';
 import { usePerformanceMonitoring } from './core/scaling/PerformanceMonitor';
 import { cacheStrategy } from './core/scaling/CacheStrategy';
-import { initializeInteractionTracking, trackInteraction } from './services/interactionService';
-
-const BlogEditor = lazy(() => import('./features/blog/components/BlogEditor'));
-const POSTS_PAGE_SIZE = 10;
-
-interface CachedPostsPage {
-  posts: BlogPost[];
-  lastVisible: QueryDocumentSnapshot | null;
-  hasMore: boolean;
-}
 
 function AppContent() {
   const [view, setView] = useState<View>('list');
@@ -54,8 +45,7 @@ function AppContent() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
   const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [pageCache, setPageCache] = useState<CachedPostsPage[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [currentPost, setCurrentPost] = useState<BlogPost | null>(null);
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
@@ -69,38 +59,31 @@ function AppContent() {
 
   usePerformanceMonitoring('AppMainFeed');
 
-  useEffect(() => {
-    const cleanup = initializeInteractionTracking(user?.uid ?? null);
+  const navTo = useCallback((newView: View) => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    
+    // Update history for back button support
+    if (newView !== view) {
+      window.history.pushState({ view: newView }, '');
+    }
 
-    const handleDocumentClick = (event: MouseEvent) => {
-      if (!event.isTrusted) return;
-      trackInteraction();
-    };
+    setView(prev => {
+      setPrevView(prev === 'post' || prev === 'profile' ? prevView : prev);
+      return newView;
+    });
+  }, [view, prevView]);
 
-    document.addEventListener('click', handleDocumentClick, { passive: true });
-
-    return () => {
-      document.removeEventListener('click', handleDocumentClick);
-      cleanup();
-    };
-  }, [user?.uid]);
-
-  const fetchPosts = useCallback(async (targetPage = 1, bypassCache = false) => {
-    const isPaginating = targetPage > 1 || pageCache.length > 0;
-
-    if (isPaginating) {
-      setLoadingMore(true);
-    } else {
+  const fetchPosts = useCallback(async (isLoadMore = false) => {
+    if (isLoadMore) setLoadingMore(true);
+    else {
       // Check cache first for initial load to scale to 10,000+ users without DB stress
-      if (view === 'list' && !bypassCache) {
-        const cached = cacheStrategy.get<CachedPostsPage>('published_posts_v2');
+      if (view === 'list') {
+        const cached = cacheStrategy.get<{ posts: BlogPost[], hasMore: boolean }>('published_posts_v2');
         if (cached) {
           setPosts(cached.posts);
           setHasMore(cached.hasMore);
-          setCurrentPage(1);
-          setPageCache([cached]);
           setLoading(false);
-          return;
+          // Still fetch in background to sync (SWR pattern)
         }
       }
       setLoading(true);
@@ -108,42 +91,21 @@ function AppContent() {
 
     try {
       if (view === 'list') {
-        const cachedPage = !bypassCache ? pageCache[targetPage - 1] : null;
-        if (cachedPage) {
-          setPosts(cachedPage.posts);
-          setHasMore(cachedPage.hasMore);
-          setCurrentPage(targetPage);
-          return;
-        }
+        const result = await getPublishedPosts(isLoadMore ? (lastDoc || undefined) : undefined);
+        const newHasMore = result.posts.length === 9;
 
-        const previousPage = pageCache[targetPage - 2];
-        const result = await getPublishedPosts(targetPage === 1 ? undefined : previousPage?.lastVisible || undefined);
-        const newHasMore = result.posts.length === POSTS_PAGE_SIZE;
-
-        if (targetPage > 1 && result.posts.length === 0) {
-          setHasMore(false);
-          return;
-        }
-
-        const pageData: CachedPostsPage = {
-          posts: result.posts,
-          lastVisible: result.lastVisible,
-          hasMore: newHasMore
-        };
-
-        setPosts(result.posts);
-        setHasMore(newHasMore);
-        setCurrentPage(targetPage);
-        setPageCache((prev) => {
-          const next = [...prev];
-          next[targetPage - 1] = pageData;
-          return next;
-        });
-
-        if (targetPage === 1) {
+        if (isLoadMore) {
+          setPosts(prev => [...prev, ...result.posts]);
+        } else {
+          setPosts(result.posts);
           // Only cache the first page for optimal scaling
-          cacheStrategy.set('published_posts_v2', pageData);
+          cacheStrategy.set('published_posts_v2', { 
+            posts: result.posts, 
+            hasMore: newHasMore 
+          });
         }
+        setLastDoc(result.lastVisible);
+        setHasMore(newHasMore);
       } else if (view === 'admin' && user) {
         const data = await getAllPostsForUser(user.uid);
         setPosts(data);
@@ -155,54 +117,19 @@ function AppContent() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [view, user, notify, pageCache]);
-
-  const navTo = useCallback((newView: View) => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
-
-    if (newView === 'list') {
-      setCurrentPage(1);
-      setPageCache([]);
-      setHasMore(true);
-      cacheStrategy.invalidate('published_posts_v2');
-
-      if (view === 'list') {
-        void fetchPosts(1, true);
-      }
-    }
-    
-    // Update history for back button support
-    if (newView !== view) {
-      window.history.pushState({ view: newView }, '');
-    }
-
-    setView(prev => {
-      setPrevView(prev === 'post' || prev === 'profile' ? prevView : prev);
-      return newView;
-    });
-  }, [view, prevView, fetchPosts]);
+  }, [view, user, lastDoc, notify]);
 
   useEffect(() => {
     if (view === 'list' || view === 'admin') {
-      if (view === 'list') {
-        setPageCache([]);
-        setCurrentPage(1);
-      }
-      fetchPosts(1);
+      fetchPosts(false);
     }
   }, [view, user]);
 
-  const handleNextPage = useCallback(() => {
-    if (!loadingMore && hasMore && posts.length > 0) {
-      void fetchPosts(currentPage + 1);
+  const handleLoadMore = useCallback(() => {
+    if (!loadingMore && hasMore) {
+      fetchPosts(true);
     }
-  }, [loadingMore, hasMore, fetchPosts, currentPage, posts.length]);
-
-  const handlePreviousPage = useCallback(() => {
-    if (!loadingMore && currentPage > 1) {
-      void fetchPosts(currentPage - 1);
-    }
-  }, [loadingMore, currentPage, fetchPosts]);
+  }, [loadingMore, hasMore, fetchPosts]);
 
   const handleSelectPost = useCallback(async (slug: string) => {
     console.log('[App] Selection Request for SLUG:', slug);
@@ -300,12 +227,8 @@ function AppContent() {
             posts={posts} 
             onSelectPost={handleSelectPost} 
             onViewProfile={handleViewProfile}
-            onNextPage={handleNextPage}
-            onPreviousPage={handlePreviousPage}
-            onPageSelect={(page) => void fetchPosts(page)}
+            onLoadMore={handleLoadMore}
             hasMore={hasMore}
-            currentPage={currentPage}
-            knownPageCount={Math.max(1, pageCache.length)}
             loadingMore={loadingMore}
             loading={loading}
           />
@@ -353,21 +276,13 @@ function AppContent() {
         );
       case 'editor':
         return (
-          <Suspense
-            fallback={
-              <div className="flex items-center justify-center min-h-[50vh]">
-                <div className="w-8 h-8 border-2 border-slate-800 border-t-accent rounded-full animate-spin" />
-              </div>
-            }
-          >
-            <BlogEditor 
-              post={editingPost} 
-              onSave={handleSavePost} 
-              onCancel={() => navTo(user ? 'admin' : 'list')}
-              onDelete={handleDeletePost}
-              onNotify={notify}
-            />
-          </Suspense>
+          <BlogEditor 
+            post={editingPost} 
+            onSave={handleSavePost} 
+            onCancel={() => navTo(user ? 'admin' : 'list')}
+            onDelete={handleDeletePost}
+            onNotify={notify}
+          />
         );
       default:
         return null;

@@ -1,6 +1,6 @@
 import { useState, useMemo, memo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Search, Clock, Calendar, ArrowLeft, ArrowRight, BookOpen, Briefcase, MapPin, DollarSign } from 'lucide-react';
+import { Search, Clock, Calendar, ArrowRight, BookOpen, Briefcase, MapPin, DollarSign } from 'lucide-react';
 import { BlogPost } from '../../../types';
 import { format } from 'date-fns';
 import { calculateReadingTime } from '../../../lib/blog-utils';
@@ -11,12 +11,8 @@ interface BlogListProps {
   posts: BlogPost[];
   onSelectPost: (slug: string) => void;
   onViewProfile: (userId: string) => void;
-  onNextPage?: () => void;
-  onPreviousPage?: () => void;
-  onPageSelect?: (page: number) => void;
+  onLoadMore?: () => void;
   hasMore?: boolean;
-  currentPage?: number;
-  knownPageCount?: number;
   loadingMore?: boolean;
   loading?: boolean;
 }
@@ -106,12 +102,8 @@ export default function BlogList({
   posts, 
   onSelectPost, 
   onViewProfile,
-  onNextPage,
-  onPreviousPage,
-  onPageSelect,
+  onLoadMore,
   hasMore,
-  currentPage = 1,
-  knownPageCount = 1,
   loadingMore,
   loading
 }: BlogListProps) {
@@ -141,24 +133,8 @@ export default function BlogList({
   const featuredPost = useMemo(() => posts[0], [posts]);
   
   const regularPosts = useMemo(() => {
-    if (!debouncedSearch && activeCategory === 'All' && currentPage === 1) {
-      return filteredPosts.filter((post) => post.id !== featuredPost?.id);
-    }
-
-    return filteredPosts;
-  }, [filteredPosts, debouncedSearch, activeCategory, featuredPost, currentPage]);
-
-  const visiblePageNumbers = useMemo(() => {
-    const total = Math.max(1, knownPageCount);
-    if (total <= 7) {
-      return Array.from({ length: total }, (_, index) => index + 1);
-    }
-
-    const windowPages = new Set<number>([1, total, currentPage - 1, currentPage, currentPage + 1]);
-    return Array.from(windowPages)
-      .filter((page) => page >= 1 && page <= total)
-      .sort((left, right) => left - right);
-  }, [currentPage, knownPageCount]);
+    return filteredPosts.filter(p => !debouncedSearch && activeCategory === 'All' ? p.id !== featuredPost?.id : true);
+  }, [filteredPosts, debouncedSearch, activeCategory, featuredPost]);
 
   if (loading && posts.length === 0) {
     return (
@@ -239,7 +215,7 @@ export default function BlogList({
       </div>
 
       {/* Featured Section (Only when no search/filter) */}
-      {!debouncedSearch && activeCategory === 'All' && currentPage === 1 && featuredPost && (
+      {!debouncedSearch && activeCategory === 'All' && featuredPost && (
         <motion.section 
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -316,60 +292,23 @@ export default function BlogList({
         )}
       </div>
 
-      {/* Pagination */}
-      {!debouncedSearch && activeCategory === 'All' && filteredPosts.length > 0 && (
-        <div className="flex flex-col items-center gap-4 pt-8">
-          <p className="text-xs font-black uppercase tracking-widest text-ink-muted">
-            Page {currentPage}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <button 
-              onClick={onPreviousPage}
-              disabled={loadingMore || currentPage === 1}
-              className="px-4 py-2.5 bg-bg-soft border border-border rounded-xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Previous
-            </button>
-            {visiblePageNumbers.map((page, index) => {
-              const previous = visiblePageNumbers[index - 1];
-              const showGap = previous && page - previous > 1;
-
-              return (
-                <div key={page} className="flex items-center gap-2">
-                  {showGap && <span className="px-1 text-sm font-black text-ink-muted">...</span>}
-                  <button
-                    onClick={() => onPageSelect?.(page)}
-                    disabled={loadingMore || page === currentPage || (page > knownPageCount)}
-                    className={`min-w-11 px-3 py-2.5 rounded-xl text-xs font-black transition-all shadow-sm border cursor-pointer ${
-                      page === currentPage
-                        ? 'bg-accent text-slate-950 border-accent'
-                        : 'bg-bg-soft border-border text-ink-muted hover:border-accent hover:text-accent'
-                    } disabled:opacity-70 disabled:cursor-not-allowed`}
-                  >
-                    {page}
-                  </button>
-                </div>
-              );
-            })}
-            <button 
-              onClick={onNextPage}
-              disabled={loadingMore || !hasMore}
-              className="px-4 py-2.5 bg-bg-soft border border-border rounded-xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
-            >
-              {loadingMore ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin" />
-                  Loading
-                </>
-              ) : (
-                <>
-                  Next
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </div>
+      {/* Load More Button */}
+      {hasMore && !debouncedSearch && activeCategory === 'All' && (
+        <div className="flex justify-center pt-8">
+          <button 
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="px-8 py-3 bg-bg-soft border border-border rounded-2xl text-sm font-bold text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loadingMore ? (
+              <>
+                <div className="w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin" />
+                Processing Dispatches...
+              </>
+            ) : (
+              'Load More Artifacts'
+            )}
+          </button>
         </div>
       )}
     </div>

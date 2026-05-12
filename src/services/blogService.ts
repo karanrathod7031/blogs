@@ -14,7 +14,6 @@ import {
   or,
   and,
   increment,
-  writeBatch,
   limit,
   startAfter,
   QueryDocumentSnapshot
@@ -25,11 +24,11 @@ import { BlogPost, Comment } from '../types';
 import { requestOrchestrator } from '../core/scaling/RequestOrchestrator';
 
 const COLLECTION_NAME = 'posts';
-const PUBLISHED_POSTS_PAGE_SIZE = 10;
 
 // Interaction Services
 
 export async function toggleLike(postId: string, userId: string, currentlyLiked: boolean): Promise<void> {
+  const { writeBatch } = await import('firebase/firestore');
   const batch = writeBatch(db);
   const postRef = doc(db, COLLECTION_NAME, postId);
   const likeRef = doc(db, COLLECTION_NAME, postId, 'likes', userId);
@@ -122,7 +121,7 @@ export async function getPublishedPosts(lastDoc?: QueryDocumentSnapshot): Promis
       postsRef, 
       where('published', '==', true),
       orderBy('createdAt', 'desc'),
-      limit(PUBLISHED_POSTS_PAGE_SIZE)
+      limit(9)
     );
 
     if (lastDoc) {

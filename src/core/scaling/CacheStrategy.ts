@@ -10,7 +10,7 @@ export interface CacheEntry<T> {
 }
 
 class CacheStrategy {
-  private memoryCache: Map<string, CacheEntry<unknown>> = new Map();
+  private memoryCache: Map<string, CacheEntry<any>> = new Map();
   private TTL = 1000 * 60 * 5; // 5 minutes
 
   constructor() {
@@ -28,7 +28,7 @@ class CacheStrategy {
     console.debug(`[Scaling] Cache pruned. Current size: ${this.memoryCache.size}`);
   }
 
-  set<T>(key: string, data: T) {
+  set(key: string, data: any) {
     // Cap cache size at 100 entries to strictly control memory usage under extreme load
     if (this.memoryCache.size > 100) {
       const firstKey = this.memoryCache.keys().next().value;
@@ -50,7 +50,7 @@ class CacheStrategy {
       return null;
     }
 
-    return entry.data as T;
+    return entry.data;
   }
 
   isValid(key: string): boolean {

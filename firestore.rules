@@ -1,6 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
     function isSignedIn() {
       return request.auth != null;
     }
@@ -13,37 +19,29 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isRootAdminEmail() {
-      return isVerified() && request.auth.token.email == 'rk.upk2345678@gmail.com';
-    }
-
     function isAdmin() {
       return isVerified() && (
-        isRootAdminEmail() ||
-        (
-          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'
-        )
+        (request.auth.token.email == 'rk.upk2345678@gmail.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin')
       );
     }
 
     function isMasterAdmin() {
-      return isRootAdminEmail();
+      return isVerified() && 
+             request.auth.token.email == 'rk.upk2345678@gmail.com';
     }
 
     function isNotSuspended() {
       return isSignedIn() && (
-        isRootAdminEmail() ||
+        (request.auth.token.email == 'rk.upk2345678@gmail.com' && request.auth.token.email_verified == true) ||
         !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) == false
       );
     }
 
     function isValidId(id) {
-      return id is string &&
-        id.size() >= 1 &&
-        id.size() <= 128 &&
-        id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -54,353 +52,171 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function hasTimestampField(data, field) {
-      return !data.keys().hasAny([field]) || data.get(field, request.time) is timestamp;
-    }
-
-    function hasOptionalString(data, field, maxLen) {
-      return !data.keys().hasAny([field]) || (data.get(field, '') is string && data.get(field, '').size() <= maxLen);
-    }
-
-    function hasOptionalInt(data, field) {
-      return !data.keys().hasAny([field]) || data.get(field, 0) is int;
-    }
-
-    function isValidDayKey(dayKey) {
-      return dayKey is string && dayKey.matches('^\\d{4}-\\d{2}-\\d{2}$');
-    }
-
-    function hasValidOptionalDayKey(data, field) {
-      return !data.keys().hasAny([field]) || isValidDayKey(data.get(field, ''));
-    }
-
-    function isValidUserProfileDocument(userId) {
-      return incoming().keys().hasOnly([
-          'uid',
-          'displayName',
-          'email',
-          'photoURL',
-          'bio',
-          'location',
-          'website',
-          'role',
-          'createdAt',
-          'updatedAt',
-          'suspended',
-          'lastSeenAt',
-          'lastActiveDayKey'
-        ]) &&
-        incoming().uid == userId &&
-        incoming().displayName is string &&
-        incoming().displayName.size() >= 1 &&
-        incoming().displayName.size() <= 200 &&
-        incoming().email is string &&
-        incoming().email.size() <= 320 &&
-        hasOptionalString(incoming(), 'photoURL', 900000) &&
-        hasOptionalString(incoming(), 'bio', 2000) &&
-        hasOptionalString(incoming(), 'location', 200) &&
-        hasOptionalString(incoming(), 'website', 500) &&
-        (
-          incoming().role == 'user' ||
-          incoming().role == 'admin'
-        ) &&
-        (!incoming().keys().hasAny(['suspended']) || incoming().suspended is bool) &&
-        hasOptionalInt(incoming(), 'lastSeenAt') &&
-        hasValidOptionalDayKey(incoming(), 'lastActiveDayKey') &&
-        hasTimestampField(incoming(), 'createdAt') &&
-        hasTimestampField(incoming(), 'updatedAt');
-    }
-
-    function isAllowedSelfRoleOnCreate() {
-      return incoming().role == (isRootAdminEmail() ? 'admin' : 'user');
-    }
-
-    function isAllowedSelfProfileUpdate(userId) {
-      return isOwner(userId) &&
-        isVerified() &&
-        isValidUserProfileDocument(userId) &&
-        incoming().uid == existing().uid &&
-        incoming().email == existing().email &&
-        incoming().role == existing().role &&
-        incoming().get('suspended', false) == existing().get('suspended', false) &&
-        incoming().get('createdAt', existing().createdAt) == existing().createdAt;
-    }
-
-    function isValidPresenceWrite(sessionId) {
-      return isValidId(sessionId) &&
-        incoming().keys().hasOnly(['sessionId', 'userId', 'dayKey', 'lastSeenAt', 'updatedAt']) &&
-        incoming().sessionId == sessionId &&
-        (!incoming().keys().hasAny(['userId']) || incoming().userId == null || isValidId(incoming().userId)) &&
-        isValidDayKey(incoming().dayKey) &&
-        incoming().lastSeenAt is int &&
-        incoming().updatedAt is int;
-    }
-
-    function isValidPublicInteractionCreate() {
-      return incoming().keys().hasOnly(['totalInteractions']) &&
-        incoming().totalInteractions is int &&
-        incoming().totalInteractions >= 1 &&
-        incoming().totalInteractions <= 25;
-    }
-
-    function isValidPublicInteractionIncrement() {
-      return incoming().diff(existing()).affectedKeys().hasOnly(['totalInteractions']) &&
-        incoming().totalInteractions is int &&
-        existing().get('totalInteractions', 0) is int &&
-        incoming().totalInteractions > existing().get('totalInteractions', 0) &&
-        incoming().totalInteractions <= existing().get('totalInteractions', 0) + 25;
-    }
-
-    function isValidStatsDoc(data) {
-      return data.keys().hasOnly([
-          'totalPosts',
-          'totalViews',
-          'totalUsers',
-          'totalLikes',
-          'totalComments',
-          'totalInteractions',
-          'todayActiveUsers',
-          'currentActiveUsers'
-        ]) &&
-        data.totalPosts is int &&
-        data.totalPosts >= 0 &&
-        data.totalViews is int &&
-        data.totalViews >= 0 &&
-        data.totalUsers is int &&
-        data.totalUsers >= 0 &&
-        data.totalLikes is int &&
-        data.totalLikes >= 0 &&
-        data.totalComments is int &&
-        data.totalComments >= 0 &&
-        data.totalInteractions is int &&
-        data.totalInteractions >= 0 &&
-        data.todayActiveUsers is int &&
-        data.todayActiveUsers >= 0 &&
-        data.currentActiveUsers is int &&
-        data.currentActiveUsers >= 0;
-    }
-
-    function isValidAuditAction(action) {
-      return action == 'suspend_user' ||
-        action == 'restore_user' ||
-        action == 'delete_user' ||
-        action == 'delete_post' ||
-        action == 'refresh_stats';
-    }
-
-    function isValidTargetType(targetType) {
-      return targetType == 'user' ||
-        targetType == 'post' ||
-        targetType == 'system';
-    }
-
-    function isValidAuditLog(logId) {
-      return isValidId(logId) &&
-        incoming().keys().hasOnly([
-          'action',
-          'actorUid',
-          'actorEmail',
-          'actorRole',
-          'targetId',
-          'targetType',
-          'targetLabel',
-          'createdAt'
-        ]) &&
-        isValidAuditAction(incoming().action) &&
-        incoming().actorUid == request.auth.uid &&
-        incoming().actorEmail == request.auth.token.email &&
-        (incoming().actorRole == 'user' || incoming().actorRole == 'admin') &&
-        isValidId(incoming().targetId) &&
-        isValidTargetType(incoming().targetType) &&
-        incoming().targetLabel is string &&
-        incoming().targetLabel.size() >= 1 &&
-        incoming().targetLabel.size() <= 200 &&
-        incoming().createdAt is timestamp;
-    }
-
+    // --- Post Validation ---
     function isValidPost(data) {
-      return data.keys().hasOnly([
-          'title',
-          'slug',
-          'content',
-          'excerpt',
-          'authorId',
-          'authorName',
-          'createdAt',
-          'updatedAt',
-          'published',
-          'tags',
-          'coverImage',
-          'category',
-          'viewCount',
-          'type',
-          'tradeCategory',
-          'tradeValue',
-          'location',
-          'likeCount'
-        ]) &&
-        data.title is string &&
-        data.title.size() >= 1 &&
-        data.title.size() <= 200 &&
-        data.slug is string &&
-        data.slug.size() >= 1 &&
-        data.slug.size() <= 200 &&
-        data.slug.matches('^[a-z0-9-]+$') &&
-        data.content is string &&
-        data.content.size() <= 50000 &&
-        data.authorId == request.auth.uid &&
-        data.authorName is string &&
-        data.authorName.size() >= 1 &&
-        data.authorName.size() <= 200 &&
-        data.published is bool &&
-        data.type is string &&
-        (data.type == 'blog' || data.type == 'trade') &&
-        hasOptionalString(data, 'excerpt', 1000) &&
-        hasOptionalString(data, 'category', 100) &&
-        hasOptionalString(data, 'coverImage', 900000) &&
-        hasOptionalString(data, 'tradeCategory', 200) &&
-        hasOptionalString(data, 'tradeValue', 200) &&
-        hasOptionalString(data, 'location', 200) &&
-        data.tags is list &&
-        data.tags.size() <= 10 &&
-        data.get('likeCount', 0) is int &&
-        data.get('likeCount', 0) >= 0 &&
-        data.get('viewCount', 0) is int &&
-        data.get('viewCount', 0) >= 0 &&
-        data.createdAt is timestamp &&
-        data.updatedAt is timestamp;
+      let requiredFields = ['title', 'slug', 'content', 'authorId', 'authorName', 'createdAt', 'updatedAt', 'published'];
+      return data.keys().hasAll(requiredFields)
+        && data.title is string && data.title.size() <= 200
+        && data.slug is string && data.slug.size() <= 200 && data.slug.matches('^[a-z0-9-]+$')
+        && data.content is string && data.content.size() <= 50000
+        && data.authorId == request.auth.uid
+        && data.published is bool
+        && (data.get('excerpt', '') is string && data.get('excerpt', '').size() <= 1000)
+        && (data.get('category', '') is string && data.get('category', '').size() <= 100)
+        && (data.get('coverImage', '') is string && data.get('coverImage', '').size() <= 900000)
+        && (data.get('tags', []) is list && data.get('tags', []).size() <= 10)
+        && (data.get('likeCount', 0) is int)
+        && (data.get('viewCount', 0) is int);
     }
 
-    function isValidViewIncrement() {
-      return resource.data.published == true &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['viewCount', 'updatedAt']) &&
-        incoming().viewCount is int &&
-        existing().get('viewCount', 0) is int &&
-        incoming().viewCount == existing().get('viewCount', 0) + 1 &&
-        incoming().updatedAt is timestamp;
+    // --- User Validation ---
+    function isValidUser(data) {
+      let requiredFields = ['uid', 'displayName', 'role'];
+      return data.keys().hasAll(requiredFields)
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() <= 100
+        && data.role in ['user', 'admin']
+        && (data.get('email', '') is string && data.get('email', '').size() <= 100)
+        && (data.get('bio', '') is string && data.get('bio', '').size() <= 1000)
+        && (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 900000)
+        && (data.get('suspended', false) is bool)
+        && (data.get('createdAt', request.time) is timestamp)
+        && (data.get('updatedAt', request.time) is timestamp);
     }
 
-    function isValidLikeCountMutation() {
-      return isSignedIn() &&
-        isNotSuspended() &&
-        resource.data.published == true &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['likeCount', 'updatedAt']) &&
-        incoming().likeCount is int &&
-        existing().get('likeCount', 0) is int &&
-        (
-          incoming().likeCount == existing().get('likeCount', 0) + 1 ||
-          incoming().likeCount == existing().get('likeCount', 0) - 1
-        ) &&
-        incoming().updatedAt is timestamp;
-    }
-
-    function isValidComment(data) {
-      return data.keys().hasOnly([
-          'postId',
-          'authorId',
-          'authorName',
-          'authorPhoto',
-          'content',
-          'createdAt',
-          'updatedAt'
-        ]) &&
-        isValidId(data.postId) &&
-        data.authorId == request.auth.uid &&
-        data.authorName is string &&
-        data.authorName.size() >= 1 &&
-        data.authorName.size() <= 200 &&
-        (!data.keys().hasAny(['authorPhoto']) || data.authorPhoto == null || (data.authorPhoto is string && data.authorPhoto.size() <= 900000)) &&
-        data.content is string &&
-        data.content.size() >= 1 &&
-        data.content.size() <= 5000 &&
-        data.createdAt is timestamp &&
-        data.updatedAt is timestamp;
-    }
-
-    match /users/{userId} {
-      allow get: if true;
-      allow list: if isAdmin();
-      allow create: if isOwner(userId) &&
-        isVerified() &&
-        isValidUserProfileDocument(userId) &&
-        incoming().email == request.auth.token.email &&
-        incoming().get('suspended', false) == false &&
-        isAllowedSelfRoleOnCreate();
-      allow update: if (
-          isAdmin() &&
-          isValidUserProfileDocument(userId)
-        ) || isAllowedSelfProfileUpdate(userId);
-      allow delete: if isMasterAdmin();
-    }
+    // --- Rules ---
 
     match /posts/{postId} {
-      allow get, list: if resource.data.published == true ||
-        isAdmin() ||
-        (isSignedIn() && resource.data.authorId == request.auth.uid);
-      allow create: if isVerified() &&
-        isNotSuspended() &&
-        isValidPost(incoming());
-      allow update: if (
-          isAdmin() &&
-          isValidPost(incoming())
-        ) || (
-          isSignedIn() &&
-          isNotSuspended() &&
-          resource.data.authorId == request.auth.uid &&
-          incoming().authorId == resource.data.authorId &&
-          incoming().createdAt == resource.data.createdAt &&
-          isValidPost(incoming())
-        ) || isValidViewIncrement() || isValidLikeCountMutation();
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
+      allow get: if isValidId(postId) && (existing().published == true || isOwner(existing().authorId) || isAdmin());
+      allow list: if resource.data.published == true || (isSignedIn() && resource.data.authorId == request.auth.uid) || isAdmin();
+      
+      allow create: if isValidId(postId)
+        && isVerified() 
+        && isNotSuspended()
+        && isValidPost(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().keys().size() >= 8; // At least required fields
 
-      match /likes/{likeUserId} {
-        allow get: if isAdmin() || isOwner(likeUserId);
+      allow update: if isValidId(postId)
+        && (isOwner(existing().authorId) || isAdmin())
+        && isVerified()
+        && isNotSuspended()
+        && isValidPost(incoming())
+        && incoming().createdAt == existing().createdAt
+        && (
+          // Action: Edit
+          (incoming().diff(existing()).affectedKeys().hasOnly(['title', 'slug', 'content', 'excerpt', 'updatedAt', 'published', 'tags', 'authorName', 'category', 'coverImage'])) 
+          || (isAdmin() && incoming().diff(existing()).affectedKeys().hasAny(['viewCount', 'likeCount']))
+        )
+        && incoming().updatedAt == request.time;
+
+      // Increment actions (viewCount) - allowed for anyone (even guests) to read, but we check if verified or signed in?
+      // Actually, view increment should probably be allowed for anyone reading the post.
+      allow update: if isValidId(postId)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['viewCount', 'updatedAt'])
+        && incoming().viewCount == (existing().get('viewCount', 0) + 1)
+        && incoming().updatedAt == request.time;
+      
+      // Like actions - Atomic enforcement using existsAfter
+      allow update: if isValidId(postId)
+        && isVerified()
+        && isNotSuspended()
+        && incoming().diff(existing()).affectedKeys().hasOnly(['likeCount', 'updatedAt'])
+        && incoming().updatedAt == request.time
+        && (
+          (incoming().likeCount == (existing().get('likeCount', 0) + 1) && existsAfter(/databases/$(database)/documents/posts/$(postId)/likes/$(request.auth.uid)))
+          || (incoming().likeCount == (existing().get('likeCount', 0) - 1) && !existsAfter(/databases/$(database)/documents/posts/$(postId)/likes/$(request.auth.uid)))
+        );
+
+      allow delete: if isValidId(postId) && (isOwner(existing().authorId) || isAdmin());
+
+      match /likes/{userId} {
+        allow get: if isSignedIn();
         allow list: if isAdmin();
-        allow create: if isOwner(likeUserId) &&
-          isNotSuspended() &&
-          incoming().keys().hasOnly(['userId', 'timestamp']) &&
-          incoming().userId == request.auth.uid &&
-          incoming().timestamp is timestamp;
-        allow delete: if isAdmin() || isOwner(likeUserId);
+        allow create: if isValidId(userId) && isOwner(userId) && isVerified() && isNotSuspended()
+          && incoming().userId == request.auth.uid
+          && incoming().timestamp == request.time
+          && incoming().keys().size() == 2;
+        allow delete: if isValidId(userId) && isOwner(userId);
       }
     }
 
     match /comments/{commentId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() &&
-        isNotSuspended() &&
-        isValidComment(incoming());
-      allow update: if false;
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.authorId == request.auth.uid);
+      allow get: if isValidId(commentId);
+      // Secure List Query: Enforce that search is targeted to a postId
+      allow list: if resource.data.postId != null && (isAdmin() || exists(/databases/$(database)/documents/posts/$(resource.data.postId))); 
+      
+      allow create: if isValidId(commentId)
+        && isVerified() 
+        && isNotSuspended()
+        && isValidId(incoming().postId)
+        // Master Gate: Post must exist
+        && exists(/databases/$(database)/documents/posts/$(incoming().postId))
+        && incoming().authorId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().content is string && incoming().content.size() <= 1000
+        && incoming().authorName is string && incoming().authorName.size() <= 100
+        && (incoming().get('authorPhoto', '') is string && incoming().get('authorPhoto', '').size() <= 900000)
+        && incoming().keys().hasAll(['postId', 'content', 'authorId', 'authorName', 'createdAt', 'updatedAt'])
+        && incoming().keys().size() <= 7;
+        
+      allow update: if isValidId(commentId)
+        && isOwner(existing().authorId)
+        && isVerified()
+        && isNotSuspended()
+        && incoming().diff(existing()).affectedKeys().hasOnly(['content', 'updatedAt'])
+        && incoming().content is string && incoming().content.size() <= 1000
+        && incoming().updatedAt == request.time;
+        
+      allow delete: if isValidId(commentId) && (isOwner(existing().authorId) || isAdmin());
     }
 
-    match /presence/{sessionId} {
-      allow get, list: if isAdmin();
-      allow create, update: if isValidPresenceWrite(sessionId);
-      allow delete: if false;
-    }
-
-    match /system/{docId} {
-      allow get, list: if isAdmin();
-      allow create: if docId == 'stats' && (
-          (isAdmin() && isValidStatsDoc(incoming())) ||
-          isValidPublicInteractionCreate()
+    match /users/{userId} {
+      // Allow reading profile publicly so authors can be shown
+      allow get: if isValidId(userId);
+      
+      allow list: if isAdmin(); 
+      
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isVerified()
+        && isValidUser(incoming())
+        && (incoming().role == 'user' || isMasterAdmin())
+        && incoming().get('suspended', false) == false
+        && incoming().keys().size() >= 7;
+        
+      allow update: if isValidId(userId)
+        && (isOwner(userId) || isAdmin())
+        && isVerified()
+        && (
+          // Owner update
+          (isOwner(userId) && isNotSuspended() 
+            && isValidUser(incoming())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'updatedAt', 'role', 'email'])
+            && incoming().role == existing().role // Immutable role for owner
+            && incoming().updatedAt == request.time
+          ) ||
+          // Admin update
+          (isAdmin() 
+            && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'suspended', 'updatedAt', 'bio', 'displayName', 'photoURL'])
+            && (isMasterAdmin() || existing().get('role', 'user') != 'admin') 
+            && incoming().updatedAt == request.time
+          )
         );
-      allow update: if docId == 'stats' && (
-          (isAdmin() && isValidStatsDoc(incoming())) ||
-          isValidPublicInteractionIncrement()
-        );
-      allow delete: if isMasterAdmin();
+
+      allow delete: if isValidId(userId)
+        && isMasterAdmin();
     }
 
-    match /auditLogs/{logId} {
-      allow get, list: if isAdmin();
-      allow create: if isAdmin() && isValidAuditLog(logId);
-      allow update, delete: if false;
+    match /system/stats {
+      allow read, write: if isAdmin();
     }
 
-    match /{document=**} {
-      allow read, write: if false;
+    match /analytics/views/entries/{viewId} {
+      allow create: if isVerified();
+      allow read: if isAdmin();
     }
   }
 }

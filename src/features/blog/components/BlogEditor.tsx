@@ -26,7 +26,9 @@ import {
 import { BlogPost } from '../../../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import TurndownService from 'turndown';
+// @ts-expect-error - turndown-plugin-gfm doesn't have types
 import { gfm } from 'turndown-plugin-gfm';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
@@ -40,8 +42,7 @@ import { TableRow as TiptapTableRow } from '@tiptap/extension-table-row';
 import { TableHeader as TiptapTableHeader } from '@tiptap/extension-table-header';
 import { TableCell as TiptapTableCell } from '@tiptap/extension-table-cell';
 import { TextAlign } from '@tiptap/extension-text-align';
-import { auth } from '../../../lib/firebase';
-import { uploadOptimizedImage } from '../../../services/storageService';
+import { GoogleGenAI } from "@google/genai";
 
 interface BlogEditorProps {
   post?: BlogPost;
@@ -49,10 +50,6 @@ interface BlogEditorProps {
   onCancel: () => void;
   onDelete?: (id: string) => Promise<void>;
   onNotify: (msg: string, type: 'success' | 'error') => void;
-}
-
-interface MarkdownCapableEditor {
-  getMarkdown?: () => string;
 }
 
 const CATEGORIES = ['AI', 'Agriculture', 'Finance', 'Web Dev', 'Projects', 'Career', 'Engineering', 'Social', 'Design', 'Commodities', 'Services', 'Healthcare', 'Logistics', 'Other'];
@@ -83,40 +80,60 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Basic pre-check: If raw file > 5MB, reject immediately
       if (file.size > 5 * 1024 * 1024) {
         onNotify("Image file is too large. Please select an image under 5MB.", 'error');
         return;
       }
 
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        onNotify('You must be signed in to upload images.', 'error');
-        return;
-      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
 
-      setUploadingCoverImage(true);
-      try {
-        const imageUrl = await uploadOptimizedImage(file, {
-          folder: `posts/${currentUser.uid}/covers`,
-          maxWidth: 1200,
-          maxHeight: 800,
-          quality: 0.7
-        });
+          // Max dimensions for header image
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 800;
 
-        setCoverImage(imageUrl);
-        onNotify('Header image uploaded successfully.', 'success');
-      } catch (error) {
-        console.error('Cover image upload failed:', error);
-        onNotify('Failed to upload header image.', 'error');
-      } finally {
-        setUploadingCoverImage(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      }
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // Quality 0.7 usually keeps images well under 500KB even at 1200px
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          
+          // Safety check: Firestore limit is 1MB total. 
+          // We aim for 700KB max for the image to leave room for text.
+          if (dataUrl.length > 800000) {
+             // If still too large, try a lower quality
+             const compressedUrl = canvas.toDataURL('image/jpeg', 0.5);
+             setCoverImage(compressedUrl);
+          } else {
+            setCoverImage(dataUrl);
+          }
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -129,7 +146,6 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
-  const [uploadingCoverImage, setUploadingCoverImage] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -160,13 +176,9 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
     content: content,
     onUpdate: ({ editor }) => {
       try {
-        const markdownEditor = editor as typeof editor & MarkdownCapableEditor;
-        if (typeof markdownEditor.getMarkdown === 'function') {
-          setContent(markdownEditor.getMarkdown());
-          return;
-        }
-
-        throw new Error('Markdown extension is unavailable');
+        // @ts-expect-error - tiptap-markdown adds getMarkdown
+        const md = editor.getMarkdown();
+        setContent(md);
       } catch (err) {
         console.warn('tiptap-markdown failed, falling back to turndown:', err);
         const html = editor.getHTML();
@@ -175,6 +187,7 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
           codeBlockStyle: 'fenced',
           bulletListMarker: '-'
         });
+        // @ts-expect-error - gfm plugin types
         turndownService.use(gfm);
         const md = turndownService.turndown(html);
         setContent(md);
@@ -216,24 +229,18 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
     if (!content) return;
     setSummarizing(true);
     try {
-      const response = await fetch('/api/summarize', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ content })
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Summarize the following blog post in exactly 1-2 sentences. Return ONLY the plain text summary. Do not include any labels, options, conversational filler, or markdown formatting like bold (**). Body: ${content}`,
       });
-
-      const payload = await response.json() as { summary?: string; error?: string };
-
-      if (!response.ok || !payload.summary) {
-        throw new Error(payload.error || 'AI summary unavailable');
+      const text = response.text;
+      if (text) {
+        // Clean up any remaining markdown bold markers just in case
+        setExcerpt(text.trim().replace(/\*\*/g, ''));
       }
-
-      setExcerpt(payload.summary.trim().replace(/\*\*/g, ''));
     } catch (err) {
-      console.error('AI summary failed:', err);
-      onNotify('AI summary is currently unavailable.', 'error');
+      console.error(err);
     } finally {
       setSummarizing(false);
     }
@@ -341,7 +348,7 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
                )}
 
                <div className="prose prose-sm md:prose-lg max-w-none prose-headings:font-black prose-headings:text-ink prose-p:text-ink-muted prose-strong:text-ink prose-strong:font-black prose-a:text-accent prose-table:border prose-table:border-border prose-th:bg-bg-soft prose-th:px-4 prose-th:py-2 prose-td:border prose-td:border-border prose-td:px-4 prose-td:py-2">
-                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '*The canvas is currently empty.*'}</ReactMarkdown>
+                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{content || '*The canvas is currently empty.*'}</ReactMarkdown>
                </div>
              </div>
           </article>
@@ -594,18 +601,16 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
                         <input 
                           value={coverImage}
                           onChange={e => setCoverImage(e.target.value)}
-                          placeholder={uploadingCoverImage ? 'Uploading image...' : 'Image URL'}
+                          placeholder="Image URL"
                           className="flex-1 bg-bg border border-border rounded-xl px-4 py-2.5 text-xs font-bold outline-none text-ink"
-                          disabled={uploadingCoverImage}
                         />
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          disabled={uploadingCoverImage}
-                          className="px-4 bg-bg-soft hover:bg-card text-ink-muted rounded-xl transition-colors cursor-pointer border border-border disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-4 bg-bg-soft hover:bg-card text-ink-muted rounded-xl transition-colors cursor-pointer border border-border"
                           title="Upload image"
                         >
-                          {uploadingCoverImage ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                          <Upload className="w-3.5 h-3.5" />
                         </button>
                       </div>
                       <input 
@@ -729,10 +734,10 @@ export default function BlogEditor({ post, onSave, onCancel, onDelete, onNotify 
 
                     <button 
                       type="submit"
-                      disabled={saving || uploadingCoverImage}
+                      disabled={saving}
                       className="w-full bg-accent text-slate-900 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all disabled:opacity-50 active:scale-95"
                     >
-                      {uploadingCoverImage ? 'Uploading image...' : saving ? 'Saving...' : 'Publish Entry'}
+                      {saving ? 'Saving...' : 'Publish Entry'}
                     </button>
 
                     {post && onDelete && (

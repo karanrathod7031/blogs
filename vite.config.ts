@@ -45,20 +45,7 @@ export default defineConfig(({mode}) => {
       outDir: 'dist',
       assetsDir: 'assets',
       emptyOutDir: true,
-      sourcemap: false,
-      chunkSizeWarningLimit: 600,
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (!id.includes('node_modules')) return;
-
-            if (id.includes('/firebase/')) return 'firebase';
-            if (id.includes('/@tiptap/') || id.includes('/prosemirror-') || id.includes('/tiptap-markdown')) return 'editor';
-            if (id.includes('/react-markdown/') || id.includes('/remark-') || id.includes('/rehype-') || id.includes('/unified/') || id.includes('/micromark/')) return 'markdown';
-            if (id.includes('/@google/genai/')) return 'ai';
-          },
-        },
-      },
+      sourcemap: false
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

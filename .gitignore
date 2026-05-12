@@ -1,6 +1,5 @@
 node_modules/
 build/
-dist/
 coverage/
 .DS_Store
 *.log
@@ -8,4 +7,3 @@ coverage/
 !.env.example
 firebase-applet-config.json
 firebase-blueprint.json
-.vercel

@@ -7,7 +7,7 @@
 type RequestIdentifier = string;
 
 class RequestOrchestrator {
-  private activeRequests: Map<RequestIdentifier, Promise<unknown>> = new Map();
+  private activeRequests: Map<RequestIdentifier, Promise<any>> = new Map();
   private maxRetries = 3;
 
   /**
@@ -16,10 +16,8 @@ class RequestOrchestrator {
    */
   async collapse<T>(id: RequestIdentifier, requestFn: () => Promise<T>): Promise<T> {
     if (this.activeRequests.has(id)) {
-      if (import.meta.env.DEV) {
-        console.debug(`[Scaling] Collapsing duplicate request: ${id}`);
-      }
-      return this.activeRequests.get(id) as Promise<T>;
+      console.debug(`[Scaling] Collapsing duplicate request: ${id}`);
+      return this.activeRequests.get(id);
     }
 
     const requestPromise = this.retry(requestFn);
@@ -43,9 +41,7 @@ class RequestOrchestrator {
       if (attempt >= this.maxRetries) throw error;
       
       const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
-      if (import.meta.env.DEV) {
-        console.warn(`[Scaling] Request failed. Retrying in ${delay.toFixed(0)}ms... (Attempt ${attempt + 1})`);
-      }
+      console.warn(`[Scaling] Request failed. Retrying in ${delay.toFixed(0)}ms... (Attempt ${attempt + 1})`);
       
       await new Promise(resolve => setTimeout(resolve, delay));
       return this.retry(fn, attempt + 1);

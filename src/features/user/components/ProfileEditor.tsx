@@ -5,7 +5,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../../lib/firebase';
 import { UserProfile } from '../../../types';
 import { handleFirestoreError, OperationType } from '../../../lib/firestore-utils';
-import { uploadOptimizedImage } from '../../../services/storageService';
 
 interface ProfileEditorProps {
   onNotify: (message: string, type: 'success' | 'error') => void;
@@ -22,7 +21,6 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploadingProfileImage, setUploadingProfileImage] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,7 +36,7 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleDPUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDPUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
@@ -46,33 +44,31 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
         return;
       }
 
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        onNotify('You must be signed in to upload images.', 'error');
-        return;
-      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          // Square target for DP
+          const SIZE = 400;
+          
+          canvas.width = SIZE;
+          canvas.height = SIZE;
+          const ctx = canvas.getContext('2d');
+          
+          // Center crop to square
+          const minDim = Math.min(width, height);
+          const sx = (width - minDim) / 2;
+          const sy = (height - minDim) / 2;
+          
+          ctx?.drawImage(img, sx, sy, minDim, minDim, 0, 0, SIZE, SIZE);
 
-      setUploadingProfileImage(true);
-      try {
-        const imageUrl = await uploadOptimizedImage(file, {
-          folder: `users/${currentUser.uid}/profile`,
-          maxWidth: 400,
-          maxHeight: 400,
-          square: true,
-          quality: 0.8
-        });
-
-        setProfile(prev => ({ ...prev, photoURL: imageUrl }));
-        onNotify('Profile image uploaded successfully.', 'success');
-      } catch (error) {
-        console.error('Profile image upload failed:', error);
-        onNotify('Failed to upload profile image.', 'error');
-      } finally {
-        setUploadingProfileImage(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      }
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          setProfile(prev => ({ ...prev, photoURL: dataUrl }));
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -115,20 +111,9 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
     setSaving(true);
     try {
       await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        displayName: profile.displayName || user.displayName || 'Anonymous User',
-        email: profile.email || user.email || '',
-        photoURL: profile.photoURL || '',
-        bio: profile.bio || '',
-        location: profile.location || '',
-        website: profile.website || '',
-        role: profile.role || 'user',
-        suspended: profile.suspended ?? false,
-        createdAt: profile.createdAt ?? serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastSeenAt: profile.lastSeenAt ?? Date.now(),
-        lastActiveDayKey: profile.lastActiveDayKey || new Date().toISOString().slice(0, 10)
-      }, { merge: true });
+        ...profile,
+        updatedAt: serverTimestamp()
+      });
       onNotify('Identity synchronized successfully', 'success');
     } catch (err) {
       console.error('Failed to update identity:', err);
@@ -195,14 +180,12 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
                   <button
                     type="button"
                     onClick={() => {
-                      if (uploadingProfileImage) return;
                       fileInputRef.current?.click();
                       setShowMenu(false);
                     }}
-                    disabled={uploadingProfileImage}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-ink-muted hover:bg-bg-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-ink-muted hover:bg-bg-soft transition-colors"
                   >
-                    {uploadingProfileImage ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Upload className="w-4 h-4 text-purple-500" />} Change Profile
+                    <Upload className="w-4 h-4 text-purple-500" /> Change Profile
                   </button>
                 </motion.div>
               )}
@@ -246,8 +229,7 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
                   value={profile.photoURL}
                   onChange={e => setProfile({...profile, photoURL: e.target.value})}
                   className="flex-1 bg-bg border border-border rounded-xl px-4 py-3 text-sm font-bold focus:bg-bg-soft focus:border-accent outline-none transition-all text-ink placeholder:text-ink-muted/30"
-                  placeholder={uploadingProfileImage ? 'Uploading image...' : 'Paste URL or click avatar to upload'}
-                  disabled={uploadingProfileImage}
+                  placeholder="Paste URL or click avatar to upload"
                 />
               </div>
             </div>
@@ -269,10 +251,10 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
 
         <button 
           type="submit"
-          disabled={saving || uploadingProfileImage}
+          disabled={saving}
           className="w-full flex items-center justify-center gap-3 bg-accent text-slate-900 py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-accent/90 transition-all active:scale-95 disabled:opacity-50 shadow-xl shadow-accent/10"
         >
-          {saving || uploadingProfileImage ? (
+          {saving ? (
             <div className="w-4 h-4 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />
           ) : (
             <>
