@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   Users, 
@@ -8,9 +8,12 @@ import {
   RefreshCcw,
   Search,
   Activity,
+  MousePointerClick,
+  Radio,
+  CalendarClock,
 } from 'lucide-react';
-import { adminService } from '../../../../services/adminService';
-import { UserProfile, BlogPost, AppStats } from '../../../../types';
+import { ActiveUserRecord, adminService } from '../../../../services/adminService';
+import { AdminAuditLog, UserProfile, BlogPost, AppStats } from '../../../../types';
 import { useAuthState } from '../../../../hooks/useAuthState';
 import { StatCard } from './StatCard';
 import { SystemPulse } from './SystemPulse';
@@ -18,19 +21,145 @@ import { UserRegistryTable } from './UserRegistryTable';
 import { PostArchiveTable } from './PostArchiveTable';
 import { useNotification } from '../../../../components/ui/Toast';
 import { ConfirmationModal } from '../../../../components/ui/ConfirmationModal';
+import { AnonymousActivityCard } from './AnonymousActivityCard';
+import { ActiveUserRecordsCard } from './ActiveUserRecordsCard';
+import { UserActivityLogChart } from './UserActivityLogChart';
+import { AdminAuditLogCard } from './AdminAuditLogCard';
+import { AuditHistoryTable } from './AuditHistoryTable';
+import { SuspiciousActivityAlert, SuspiciousActivityAlertsCard } from './SuspiciousActivityAlertsCard';
 
 interface AdminDashboardProps {
   onViewPost: (slug: string) => void;
 }
 
+const dashboardTabs: Array<'overview' | 'users' | 'posts' | 'audits'> = ['overview', 'users', 'posts', 'audits'];
+const OVERVIEW_AUTO_REFRESH_MS = 2 * 60 * 1000;
+const AUDIT_HISTORY_LIMIT = 150;
+
+type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+interface ResourceState<T> {
+  status: ResourceStatus;
+  data: T | null;
+}
+
+interface AnonymousActivityStats {
+  todayActive: number;
+  currentActive: number;
+  recentSessions: number;
+}
+
+const ROOT_ADMIN_EMAIL = 'rk.upk2345678@gmail.com';
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return 'Unknown error';
+}
+
+function sortUsersWithAdminFirst(list: UserProfile[]): UserProfile[] {
+  return [...list].sort((left, right) => {
+    const leftRoot = left.email === ROOT_ADMIN_EMAIL ? 1 : 0;
+    const rightRoot = right.email === ROOT_ADMIN_EMAIL ? 1 : 0;
+    if (leftRoot !== rightRoot) return rightRoot - leftRoot;
+
+    const leftAdmin = (left.email === ROOT_ADMIN_EMAIL || left.role === 'admin') ? 1 : 0;
+    const rightAdmin = (right.email === ROOT_ADMIN_EMAIL || right.role === 'admin') ? 1 : 0;
+    if (leftAdmin !== rightAdmin) return rightAdmin - leftAdmin;
+
+    const leftCreated = left.createdAt && 'toMillis' in left.createdAt ? left.createdAt.toMillis() : 0;
+    const rightCreated = right.createdAt && 'toMillis' in right.createdAt ? right.createdAt.toMillis() : 0;
+    return rightCreated - leftCreated;
+  }).map((entry) => entry.email === ROOT_ADMIN_EMAIL ? { ...entry, role: 'admin' } : entry);
+}
+
+function buildSuspiciousAlerts(args: {
+  auditLogs: AdminAuditLog[];
+  anonymous: AnonymousActivityStats | null;
+  stats: AppStats | null;
+}): SuspiciousActivityAlert[] {
+  const alerts: SuspiciousActivityAlert[] = [];
+  const now = Date.now();
+  const recentAuditLogs = args.auditLogs.filter((log) => {
+    const createdAt = log.createdAt?.toDate().getTime();
+    return typeof createdAt === 'number' && createdAt >= now - ONE_DAY_MS;
+  });
+
+  const destructiveLogs = recentAuditLogs.filter((log) =>
+    log.action === 'delete_post' || log.action === 'delete_user' || log.action === 'suspend_user'
+  );
+
+  const lastHourDestructiveCount = destructiveLogs.filter((log) => {
+    const createdAt = log.createdAt?.toDate().getTime();
+    return typeof createdAt === 'number' && createdAt >= now - ONE_HOUR_MS;
+  }).length;
+
+  if (lastHourDestructiveCount >= 3) {
+    alerts.push({
+      id: 'destructive-spike',
+      severity: 'high',
+      title: 'Rapid destructive admin actions',
+      description: `${lastHourDestructiveCount} delete or suspension actions were recorded in the last hour.`,
+      source: 'Audit logs / last hour'
+    });
+  }
+
+  const destructiveByActor = destructiveLogs.reduce<Record<string, number>>((acc, log) => {
+    acc[log.actorEmail] = (acc[log.actorEmail] || 0) + 1;
+    return acc;
+  }, {});
+
+  const topActor = Object.entries(destructiveByActor).sort((left, right) => right[1] - left[1])[0];
+  if (topActor && topActor[1] >= 4) {
+    alerts.push({
+      id: 'actor-spike',
+      severity: 'medium',
+      title: 'Single actor triggered repeated enforcement',
+      description: `${topActor[0]} performed ${topActor[1]} destructive actions in the last 24 hours.`,
+      source: 'Audit logs / actor clustering'
+    });
+  }
+
+  if (args.anonymous && args.stats) {
+    const signedCurrent = args.stats.currentActiveUsers;
+    const anonymousCurrent = args.anonymous.currentActive;
+    const anonymousToday = args.anonymous.todayActive;
+
+    if (anonymousCurrent >= 10 || (anonymousCurrent >= 5 && anonymousCurrent > Math.max(1, signedCurrent) * 3)) {
+      alerts.push({
+        id: 'anonymous-live-spike',
+        severity: anonymousCurrent >= 10 ? 'high' : 'medium',
+        title: 'Anonymous live traffic spike',
+        description: `${anonymousCurrent} anonymous visitors are active right now versus ${signedCurrent} signed-in users.`,
+        source: 'Anonymous presence telemetry'
+      });
+    }
+
+    if (anonymousToday >= 40) {
+      alerts.push({
+        id: 'anonymous-daily-volume',
+        severity: 'low',
+        title: 'Elevated anonymous daily traffic',
+        description: `${anonymousToday} anonymous sessions were tracked today. Review if this traffic pattern is expected.`,
+        source: 'Anonymous daily telemetry'
+      });
+    }
+  }
+
+  return alerts;
+}
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) => {
-  const { user } = useAuthState();
+  const { user, profile, loading: authLoading } = useAuthState();
   const { notify } = useNotification();
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<AppStats | null>(null);
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'posts'>('overview');
+  const [usersState, setUsersState] = useState<ResourceState<UserProfile[]>>({ status: 'idle', data: null });
+  const [postsState, setPostsState] = useState<ResourceState<BlogPost[]>>({ status: 'idle', data: null });
+  const [statsState, setStatsState] = useState<ResourceState<AppStats>>({ status: 'idle', data: null });
+  const [anonymousState, setAnonymousState] = useState<ResourceState<AnonymousActivityStats>>({ status: 'idle', data: null });
+  const [activeRecordsState, setActiveRecordsState] = useState<ResourceState<ActiveUserRecord[]>>({ status: 'idle', data: null });
+  const [auditLogsState, setAuditLogsState] = useState<ResourceState<AdminAuditLog[]>>({ status: 'idle', data: null });
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'posts' | 'audits'>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -39,34 +168,199 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   const [confirmDeletePayload, setConfirmDeletePayload] = useState<string | null>(null);
   const [confirmDeleteUserPayload, setConfirmDeleteUserPayload] = useState<string | null>(null);
 
-  const fetchData = async (silent = false) => {
-    if (!silent) setLoading(true);
+  const isAdmin = profile?.role === 'admin' || user?.email === ROOT_ADMIN_EMAIL;
+
+  const users = usersState.data || [];
+  const posts = postsState.data || [];
+  const activeRecords = activeRecordsState.data || [];
+  const auditLogs = auditLogsState.data || [];
+  const suspiciousAlerts = useMemo(
+    () => buildSuspiciousAlerts({
+      auditLogs,
+      anonymous: anonymousState.data,
+      stats: statsState.data
+    }),
+    [anonymousState.data, auditLogs, statsState.data]
+  );
+  const overviewStats: Partial<Record<keyof AppStats, number | null>> = {
+    totalUsers: statsState.status === 'ready' ? (statsState.data?.totalUsers ?? 0) : null,
+    totalPosts: statsState.status === 'ready' ? (statsState.data?.totalPosts ?? 0) : null,
+    totalViews: statsState.status === 'ready' ? (statsState.data?.totalViews ?? 0) : null,
+    totalLikes: statsState.status === 'ready' ? (statsState.data?.totalLikes ?? 0) : null,
+    totalComments: statsState.status === 'ready' ? (statsState.data?.totalComments ?? 0) : null,
+    totalInteractions: statsState.status === 'ready' ? (statsState.data?.totalInteractions ?? 0) : null,
+    todayActiveUsers: statsState.status === 'ready'
+      ? (statsState.data?.todayActiveUsers ?? 0) + (anonymousState.data?.todayActive || 0)
+      : null,
+    currentActiveUsers: statsState.status === 'ready'
+      ? (statsState.data?.currentActiveUsers ?? 0) + (anonymousState.data?.currentActive || 0)
+      : null
+  };
+
+  const fetchUsers = async (silent = false) => {
+    if (!silent || !usersState.data) {
+      setUsersState((prev) => ({ ...prev, status: 'loading' }));
+    }
+
     try {
-      const dbStats = await adminService.getAppStats();
-      const allUsers = await adminService.getAllUsers();
-      const allPosts = await adminService.getAllPosts();
-      
-      setStats(dbStats);
-      setUsers(allUsers);
-      setPosts(allPosts);
+      const allUsers = sortUsersWithAdminFirst(await adminService.getAllUsers());
+      setUsersState({ status: 'ready', data: allUsers });
     } catch (error) {
-      console.error('Failed to fetch admin data:', error);
-    } finally {
-      if (!silent) setLoading(false);
+      console.error('Failed to fetch users:', error);
+      setUsersState((prev) => ({ status: 'error', data: prev.data }));
+      notify(`User registry sync failed: ${getErrorMessage(error)}`, 'error');
     }
   };
 
+  const fetchPosts = async (silent = false) => {
+    if (!silent || !postsState.data) {
+      setPostsState((prev) => ({ ...prev, status: 'loading' }));
+    }
+
+    try {
+      const allPosts = await adminService.getAllPosts();
+      setPostsState({ status: 'ready', data: allPosts });
+    } catch (error) {
+      console.error('Failed to fetch posts:', error);
+      setPostsState((prev) => ({ status: 'error', data: prev.data }));
+      notify(`Archive sync failed: ${getErrorMessage(error)}`, 'error');
+    }
+  };
+
+  const fetchStats = async (silent = false) => {
+    if (!silent || !statsState.data) {
+      setStatsState((prev) => ({ ...prev, status: 'loading' }));
+    }
+
+    try {
+      const statSnapshot = await adminService.getAppStats();
+      setStatsState({ status: 'ready', data: statSnapshot });
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+      setStatsState((prev) => ({ status: 'error', data: prev.data }));
+      notify(`Telemetry sync failed: ${getErrorMessage(error)}`, 'error');
+    }
+  };
+
+  const fetchAnonymous = async (silent = false) => {
+    if (!silent || !anonymousState.data) {
+      setAnonymousState((prev) => ({ ...prev, status: 'loading' }));
+    }
+
+    try {
+      const snapshot = await adminService.getAnonymousActivityStats();
+      if (!snapshot) {
+        setAnonymousState((prev) => ({ status: 'error', data: prev.data }));
+        return;
+      }
+      setAnonymousState({ status: 'ready', data: snapshot });
+    } catch (error) {
+      console.error('Failed to fetch anonymous activity:', error);
+      setAnonymousState((prev) => ({ status: 'error', data: prev.data }));
+      notify(`Anonymous activity sync failed: ${getErrorMessage(error)}`, 'error');
+    }
+  };
+
+  const fetchActiveRecords = async (silent = false) => {
+    if (!silent || !activeRecordsState.data) {
+      setActiveRecordsState((prev) => ({ ...prev, status: 'loading' }));
+    }
+
+    try {
+      const records = await adminService.getRecentActiveUsers();
+      setActiveRecordsState({ status: 'ready', data: records });
+    } catch (error) {
+      console.error('Failed to fetch active user records:', error);
+      setActiveRecordsState((prev) => ({ status: 'error', data: prev.data }));
+      notify(`Active user log sync failed: ${getErrorMessage(error)}`, 'error');
+    }
+  };
+
+  const fetchAuditLogs = async (silent = false) => {
+    if (!silent || !auditLogsState.data) {
+      setAuditLogsState((prev) => ({ ...prev, status: 'loading' }));
+    }
+
+    try {
+      const records = silent && auditLogsState.data
+        ? await adminService.getRecentAuditLogs()
+        : await adminService.getAuditLogs(AUDIT_HISTORY_LIMIT);
+      setAuditLogsState({ status: 'ready', data: records });
+    } catch (error) {
+      console.error('Failed to fetch admin audit logs:', error);
+      setAuditLogsState((prev) => ({ status: 'error', data: prev.data }));
+      notify(`Admin audit sync failed: ${getErrorMessage(error)}`, 'error');
+    }
+  };
+
+  const fetchData = async (silent = false) => {
+    if (authLoading) return;
+
+    if (!user || !isAdmin) {
+      setUsersState((prev) => ({ ...prev, status: 'idle' }));
+      setPostsState((prev) => ({ ...prev, status: 'idle' }));
+      setStatsState((prev) => ({ ...prev, status: 'idle' }));
+      setAnonymousState((prev) => ({ ...prev, status: 'idle' }));
+      setActiveRecordsState((prev) => ({ ...prev, status: 'idle' }));
+      setAuditLogsState((prev) => ({ ...prev, status: 'idle' }));
+      return;
+    }
+
+    if (activeTab === 'overview') {
+      await Promise.all([
+        fetchStats(silent),
+        fetchAnonymous(silent),
+        fetchActiveRecords(silent),
+        fetchAuditLogs(silent)
+      ]);
+      return;
+    }
+
+    if (activeTab === 'users') {
+      await fetchUsers(silent);
+      return;
+    }
+
+    if (activeTab === 'posts') {
+      await Promise.all([
+        fetchUsers(silent),
+        fetchPosts(silent)
+      ]);
+      return;
+    }
+
+    await fetchAuditLogs(silent);
+  };
+
   useEffect(() => {
-    fetchData();
-  }, []);
+    void fetchData();
+  }, [authLoading, user?.uid, profile?.role, activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'overview' || !user || !isAdmin) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void fetchData(true);
+      }
+    }, OVERVIEW_AUTO_REFRESH_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeTab, user?.uid, isAdmin]);
 
   const handleRefreshStats = async () => {
+    if (!user || !isAdmin) return;
+
     setRefreshing(true);
     try {
       const newStats = await adminService.refreshStats();
-      setStats(newStats);
+      setStatsState({ status: 'ready', data: newStats });
+      await fetchData(true);
     } catch (error) {
       console.error('Failed to refresh stats:', error);
+      notify('Stats refresh failed', 'error');
     } finally {
       setRefreshing(false);
     }
@@ -76,7 +370,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
     setSuspendingUserIds(prev => new Set(prev).add(userId));
     try {
       // Optimistic update
-      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, suspended: !isSuspended } : u));
+      setUsersState((prev) => ({
+        ...prev,
+        data: (prev.data || []).map((entry) => entry.uid === userId ? { ...entry, suspended: !isSuspended } : entry)
+      }));
       
       await adminService.toggleUserSuspension(userId, isSuspended);
       notify(`Identity ${isSuspended ? 'restored' : 'suspended'} successfully`, 'success');
@@ -87,7 +384,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
       console.error('Failed to toggle suspension:', error);
       notify('Security protocol failure: Suspension could not be enforced', 'error');
       // Rollback
-      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, suspended: isSuspended } : u));
+      setUsersState((prev) => ({
+        ...prev,
+        data: (prev.data || []).map((entry) => entry.uid === userId ? { ...entry, suspended: isSuspended } : entry)
+      }));
     } finally {
       setSuspendingUserIds(prev => {
         const next = new Set(prev);
@@ -117,14 +417,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
       await adminService.deletePost(postId);
       console.log(`[Admin] SYSTEM_LOG: Deletion confirmed for ${postId}`);
       
-      setPosts(prev => prev.filter(p => p.id !== postId));
+      setPostsState((prev) => ({
+        ...prev,
+        data: (prev.data || []).filter((entry) => entry.id !== postId)
+      }));
       notify('Archive entry terminated successfully', 'success');
       
       // Delay refresh slightly to allow firestore to propagate
       setTimeout(() => handleRefreshStats(), 1000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`[Admin] SYSTEM_ERROR: Termination failed for ${postId}`, error);
-      notify(`Operation Failed: ${error.message || 'Access Denied'}`, 'error');
+      notify(`Operation Failed: ${getErrorMessage(error) || 'Access Denied'}`, 'error');
     } finally {
       setDeletingIds(prev => {
         const next = new Set(prev);
@@ -157,11 +460,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
     setDeletingUserIds(prev => new Set(prev).add(userId));
     try {
       await adminService.deleteUser(userId);
-      setUsers(prev => prev.filter(u => u.uid !== userId));
+      setUsersState((prev) => ({
+        ...prev,
+        data: (prev.data || []).filter((entry) => entry.uid !== userId)
+      }));
       notify('User identity purged from registry', 'success');
       handleRefreshStats();
-    } catch (error: any) {
-      notify(`Purge failed: ${error.message || 'Access Denied'}`, 'error');
+    } catch (error: unknown) {
+      notify(`Purge failed: ${getErrorMessage(error) || 'Access Denied'}`, 'error');
     } finally {
       setDeletingUserIds(prev => {
         const next = new Set(prev);
@@ -172,7 +478,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
     }
   };
 
-  if (loading) {
+  const isBootstrapping = !authLoading && isAdmin && (
+    activeTab === 'overview'
+      ? [statsState.status, anonymousState.status, activeRecordsState.status, auditLogsState.status].every((status) => status === 'idle' || status === 'loading')
+      : activeTab === 'users'
+        ? (usersState.status === 'idle' || usersState.status === 'loading')
+        : activeTab === 'posts'
+          ? [usersState.status, postsState.status].every((status) => status === 'idle' || status === 'loading')
+          : (auditLogsState.status === 'idle' || auditLogsState.status === 'loading')
+  );
+
+  if (isBootstrapping) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <motion.div 
@@ -217,13 +533,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
 
       {/* Tabs */}
       <div className="flex gap-2 p-1 bg-bg-soft rounded-2xl w-fit border border-border">
-        {['overview', 'users', 'posts'].map((tab) => (
+        {dashboardTabs.map((tab) => (
           <button 
             key={tab}
-            onClick={() => setActiveTab(tab as any)}
+            onClick={() => setActiveTab(tab)}
             className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer capitalize ${activeTab === tab ? 'bg-card text-accent shadow-sm border border-border' : 'text-ink-muted hover:text-ink'}`}
           >
-            {tab === 'users' ? 'User Registry' : tab === 'posts' ? 'Global Archive' : tab}
+            {tab === 'users' ? 'User Registry' : tab === 'posts' ? 'Global Archive' : tab === 'audits' ? 'Audit History' : tab}
           </button>
         ))}
       </div>
@@ -235,63 +551,101 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
           className="space-y-8"
         >
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard icon={<Users className="w-5 h-5" />} label="Total Nodes" value={stats?.totalUsers || 0} trend="+3.2%" color="bg-blue-50 text-blue-600" />
-            <StatCard icon={<FileText className="w-5 h-5" />} label="Total Dispatches" value={stats?.totalPosts || 0} trend="+5.1%" color="bg-emerald-50 text-emerald-600" />
-            <StatCard icon={<Eye className="w-5 h-5" />} label="Network Reach" value={stats?.totalViews || 0} trend="+12.4%" color="bg-amber-50 text-amber-600" />
-            <StatCard icon={<Activity className="w-5 h-5" />} label="Engagement" value={(stats?.totalLikes || 0) + (stats?.totalComments || 0)} trend="+8.2%" color="bg-rose-50 text-rose-600" />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-6">
+            <StatCard icon={<Users className="w-5 h-5" />} label="Total Nodes" value={overviewStats.totalUsers ?? null} trend="+3.2%" color="bg-blue-50 text-blue-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<FileText className="w-5 h-5" />} label="Total Dispatches" value={overviewStats.totalPosts ?? null} trend="+5.1%" color="bg-emerald-50 text-emerald-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<Eye className="w-5 h-5" />} label="Network Reach" value={overviewStats.totalViews ?? null} trend="+12.4%" color="bg-amber-50 text-amber-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<Activity className="w-5 h-5" />} label="Engagement" value={overviewStats.totalLikes !== null && overviewStats.totalComments !== null ? overviewStats.totalLikes + overviewStats.totalComments : null} trend="+8.2%" color="bg-rose-50 text-rose-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<MousePointerClick className="w-5 h-5" />} label="Total Clicks" value={overviewStats.totalInteractions ?? null} trend="Live" color="bg-cyan-50 text-cyan-600" status={statsState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<CalendarClock className="w-5 h-5" />} label="Today Active" value={overviewStats.todayActiveUsers ?? null} trend="Today" color="bg-violet-50 text-violet-600" status={statsState.status === 'error' || anonymousState.status === 'error' ? 'error' : 'ready'} />
+            <StatCard icon={<Radio className="w-5 h-5" />} label="Currently Active" value={overviewStats.currentActiveUsers ?? null} trend="5 min" color="bg-lime-50 text-lime-600" status={statsState.status === 'error' || anonymousState.status === 'error' ? 'error' : 'ready'} />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
-            <SystemPulse />
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+            <div className="xl:col-span-8 space-y-8">
+              <SystemPulse stats={overviewStats} />
+              <UserActivityLogChart records={activeRecords} />
+            </div>
 
-            <div className="space-y-6">
-              <SecurityStatusCard />
+            <div className="xl:col-span-4 space-y-6">
+              <SuspiciousActivityAlertsCard alerts={suspiciousAlerts} />
+              <AnonymousActivityCard
+                todayActive={anonymousState.status === 'ready' ? (anonymousState.data?.todayActive ?? 0) : null}
+                currentActive={anonymousState.status === 'ready' ? (anonymousState.data?.currentActive ?? 0) : null}
+                recentSessions={anonymousState.data?.recentSessions ?? 0}
+                status={anonymousState.status === 'error' ? 'error' : anonymousState.status === 'loading' ? 'loading' : 'ready'}
+              />
+              <ActiveUserRecordsCard records={activeRecords} />
+              <AdminAuditLogCard
+                logs={auditLogs}
+                status={auditLogsState.status === 'error' ? 'error' : auditLogsState.status === 'loading' ? 'loading' : 'ready'}
+              />
+              <SecurityStatusCard status={{
+                users: usersState.status,
+                posts: postsState.status,
+                stats: statsState.status
+              }} />
               <MasterCredentialsCard />
             </div>
           </div>
         </motion.div>
       )}
 
-      {(activeTab === 'users' || activeTab === 'posts') && (
+      {(activeTab === 'users' || activeTab === 'posts' || activeTab === 'audits') && (
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           className="space-y-6"
         >
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted" />
-            <input 
-              type="text"
-              placeholder={`Search ${activeTab}...`}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-6 py-4 bg-bg-soft border border-border rounded-2xl outline-none focus:border-accent transition-all font-medium text-sm text-ink placeholder:text-ink-muted/50"
-            />
-          </div>
-
-          {activeTab === 'users' ? (
-            <UserRegistryTable 
-              users={filteredUsers} 
-              onToggleSuspension={handleToggleSuspension} 
-              onDeleteUser={handleDeleteUser}
-              deletingUserIds={deletingUserIds}
-              suspendingUserIds={suspendingUserIds}
-              currentUserId={user?.uid}
-            />
-          ) : (
-            <PostArchiveTable 
-              posts={filteredPosts} 
-              users={users} 
-              deletingIds={deletingIds} 
-              onDeletePost={handleDeletePost} 
-              onToggleSuspension={handleToggleSuspension}
-              suspendingUserIds={suspendingUserIds}
-              onViewPost={onViewPost}
-            />
+          {activeTab !== 'audits' && (
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted" />
+              <input 
+                type="text"
+                placeholder={`Search ${activeTab}...`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-6 py-4 bg-bg-soft border border-border rounded-2xl outline-none focus:border-accent transition-all font-medium text-sm text-ink placeholder:text-ink-muted/50"
+              />
+            </div>
           )}
 
-          {(activeTab === 'users' ? filteredUsers : filteredPosts).length === 0 && (
+          {activeTab === 'users' ? (
+            usersState.status === 'error' && filteredUsers.length === 0 ? (
+              <DataUnavailablePanel label="User registry" />
+            ) : (
+              <UserRegistryTable 
+                users={filteredUsers} 
+                onToggleSuspension={handleToggleSuspension} 
+                onDeleteUser={handleDeleteUser}
+                deletingUserIds={deletingUserIds}
+                suspendingUserIds={suspendingUserIds}
+                currentUserId={user?.uid}
+              />
+            )
+          ) : activeTab === 'posts' ? (
+            postsState.status === 'error' && filteredPosts.length === 0 ? (
+              <DataUnavailablePanel label="Global archive" />
+            ) : (
+              <PostArchiveTable 
+                posts={filteredPosts} 
+                users={users} 
+                deletingIds={deletingIds} 
+                onDeletePost={handleDeletePost} 
+                onToggleSuspension={handleToggleSuspension}
+                suspendingUserIds={suspendingUserIds}
+                onViewPost={onViewPost}
+              />
+            )
+          ) : (
+            auditLogsState.status === 'error' && auditLogs.length === 0 ? (
+              <DataUnavailablePanel label="Audit history" />
+            ) : (
+              <AuditHistoryTable logs={auditLogs} />
+            )
+          )}
+
+          {(activeTab === 'users' ? filteredUsers : filteredPosts).length === 0 && activeTab !== 'audits' && !((activeTab === 'users' ? usersState.status : postsState.status) === 'error') && (
             <div className="p-20 text-center opacity-30 bg-bg-soft border border-border rounded-[2rem]">
               <Search className="w-12 h-12 mx-auto mb-4 text-ink-muted" />
               <p className="text-xs font-black uppercase tracking-widest text-ink-muted">No signals found in current frequency</p>
@@ -321,14 +675,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewPost }) =>
   );
 };
 
-const SecurityStatusCard = () => (
+const DataUnavailablePanel = ({ label }: { label: string }) => (
+  <div className="p-20 text-center bg-bg-soft border border-border rounded-[2rem]">
+    <Search className="w-12 h-12 mx-auto mb-4 text-amber-500/70" />
+    <p className="text-xs font-black uppercase tracking-widest text-amber-600">{label} unavailable</p>
+    <p className="mt-2 text-sm font-medium text-ink-muted">That section failed to synchronize, but the rest of the dashboard is still active.</p>
+  </div>
+);
+
+const SecurityStatusCard = ({ status }: { status: { users: ResourceStatus; posts: ResourceStatus; stats: ResourceStatus } }) => (
   <div className="premium-card p-6 bg-card border border-border shadow-xl">
     <h4 className="text-xs font-black uppercase text-ink-muted tracking-widest mb-4">Security Status</h4>
     <div className="space-y-4">
       {[
         { label: 'Encryption Layer', status: 'ACTIVE', color: 'bg-emerald-500/10 text-emerald-500' },
         { label: 'Auth Protocols', status: 'STABLE', color: 'bg-emerald-500/10 text-emerald-500' },
-        { label: 'Database Sync', status: 'PENDING', color: 'bg-amber-400/10 text-amber-600' },
+        {
+          label: 'Database Sync',
+          status: [status.users, status.posts, status.stats].includes('error') ? 'DEGRADED' : 'STABLE',
+          color: [status.users, status.posts, status.stats].includes('error')
+            ? 'bg-amber-400/10 text-amber-600'
+            : 'bg-emerald-500/10 text-emerald-500'
+        },
       ].map((item) => (
         <div key={item.label} className="flex items-center justify-between">
           <span className="text-sm font-bold text-ink">{item.label}</span>
