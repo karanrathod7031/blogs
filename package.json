@@ -15,6 +15,7 @@
     "@google/genai": "^1.29.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.14",
+    "@tiptap/core": "^3.22.5",
     "@tiptap/extension-image": "^3.22.5",
     "@tiptap/extension-link": "^3.22.5",
     "@tiptap/extension-placeholder": "^3.22.5",
@@ -44,8 +45,7 @@
     "tailwind-merge": "^3.5.0",
     "tiptap-markdown": "^0.9.0",
     "turndown": "^7.2.4",
-    "turndown-plugin-gfm": "^1.0.2",
-    "vite": "^6.2.3"
+    "turndown-plugin-gfm": "^1.0.2"
   },
   "devDependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
