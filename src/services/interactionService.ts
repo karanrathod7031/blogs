@@ -90,7 +90,8 @@ function readPendingInteractions(): number {
   if (typeof window === 'undefined') return 0;
 
   const rawValue = window.localStorage.getItem(PENDING_INTERACTIONS_KEY);
-  const parsedValue = rawValue ? Number.parseInt(rawValue, 10) : 0;
+  const parsedValue = rawValue ? Number.parseInt(rawValue, 20) : 0;
+   // const parsedValue = rawValue ? Number.parseInt(rawValue, 10) : 0;
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 0;
 }
 
