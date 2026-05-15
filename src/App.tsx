@@ -26,8 +26,61 @@ import { cacheStrategy } from './core/scaling/CacheStrategy';
 
 const PUBLISHED_POSTS_PAGE_SIZE = 10;
 
+type RouteState = {
+  view: View;
+  slug?: string;
+  profileId?: string;
+};
+
+function getRouteState(pathname: string): RouteState {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+
+  if (normalizedPath.startsWith('/post/')) {
+    const slug = decodeURIComponent(normalizedPath.slice('/post/'.length));
+    return slug ? { view: 'post', slug } : { view: 'list' };
+  }
+
+  if (normalizedPath.startsWith('/profile/')) {
+    const profileId = decodeURIComponent(normalizedPath.slice('/profile/'.length));
+    return profileId ? { view: 'profile', profileId } : { view: 'list' };
+  }
+
+  if (normalizedPath === '/studio') {
+    return { view: 'admin' };
+  }
+
+  if (normalizedPath === '/editor') {
+    return { view: 'editor' };
+  }
+
+  if (normalizedPath === '/admin-panel') {
+    return { view: 'admin-panel' };
+  }
+
+  return { view: 'list' };
+}
+
+function getPathForView(view: View, options?: { slug?: string; profileId?: string }): string {
+  switch (view) {
+    case 'post':
+      return options?.slug ? `/post/${encodeURIComponent(options.slug)}` : '/';
+    case 'profile':
+      return options?.profileId ? `/profile/${encodeURIComponent(options.profileId)}` : '/';
+    case 'admin':
+      return '/studio';
+    case 'editor':
+      return '/editor';
+    case 'admin-panel':
+      return '/admin-panel';
+    case 'list':
+    default:
+      return '/';
+  }
+}
+
 function AppContent() {
-  const [view, setView] = useState<View>('list');
+  const initialRoute = getRouteState(window.location.pathname);
+  const [view, setView] = useState<View>(initialRoute.view);
   const [prevView, setPrevView] = useState<View>('list');
 
   useEffect(() => {
@@ -79,17 +132,18 @@ function AppContent() {
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      if (event.state?.view) {
-        setView(event.state.view);
-      } else {
-        setView('list');
-      }
+      const route = getRouteState(window.location.pathname);
+      setCurrentProfileId(route.profileId || null);
+      setCurrentPost(null);
+      setEditingPost(undefined);
+      setView(route.view);
     };
 
     window.addEventListener('popstate', handlePopState);
 
     if (!window.history.state) {
-      window.history.replaceState({ view: 'list' }, '');
+      const route = getRouteState(window.location.pathname);
+      window.history.replaceState(route, '', window.location.pathname);
     }
 
     return () => window.removeEventListener('popstate', handlePopState);
@@ -103,7 +157,7 @@ function AppContent() {
   const [pageCache, setPageCache] = useState<Record<number, BlogPost[]>>({});
   const [cursorCache, setCursorCache] = useState<Record<number, QueryDocumentSnapshot | null>>({});
   const [currentPost, setCurrentPost] = useState<BlogPost | null>(null);
-  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(initialRoute.profileId || null);
   const [editingPost, setEditingPost] = useState<BlogPost | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -114,18 +168,32 @@ function AppContent() {
 
   usePerformanceMonitoring('AppMainFeed');
 
-  const navTo = useCallback((newView: View) => {
+  const navTo = useCallback((newView: View, options?: { slug?: string; profileId?: string; replace?: boolean }) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
+    const resolvedProfileId = options?.profileId ?? (newView === 'profile' ? currentProfileId || undefined : undefined);
+    const nextPath = getPathForView(newView, { ...options, profileId: resolvedProfileId });
+    const routeState: RouteState = {
+      view: newView,
+      slug: options?.slug,
+      profileId: resolvedProfileId
+    };
 
-    if (newView !== view) {
-      window.history.pushState({ view: newView }, '');
+    if (options?.replace) {
+      window.history.replaceState(routeState, '', nextPath);
+    } else if (
+      newView !== view ||
+      nextPath !== window.location.pathname ||
+      resolvedProfileId !== currentProfileId
+    ) {
+      window.history.pushState(routeState, '', nextPath);
     }
 
     setView((prev) => {
       setPrevView(prev === 'post' || prev === 'profile' ? prevView : prev);
       return newView;
     });
-  }, [view, prevView]);
+    setCurrentProfileId(resolvedProfileId || null);
+  }, [view, prevView, currentProfileId]);
 
   const fetchPosts = useCallback(async () => {
     if (view === 'list') {
@@ -180,6 +248,15 @@ function AppContent() {
       fetchPosts();
     }
   }, [view, user, fetchPosts]);
+
+  useEffect(() => {
+    const route = getRouteState(window.location.pathname);
+
+    if (route.view === 'profile' && route.profileId) {
+      setCurrentProfileId(route.profileId);
+      setView('profile');
+    }
+  }, []);
 
   const handleNextPage = useCallback(async () => {
     const nextPage = currentPage + 1;
@@ -259,7 +336,7 @@ function AppContent() {
   const canGoPrevious = currentPage > 1;
   const canGoNext = Boolean(pageCache[currentPage + 1]) || hasMore;
 
-  const handleSelectPost = useCallback(async (slug: string) => {
+  const handleSelectPost = useCallback(async (slug: string, replaceHistory = false) => {
     console.log('[App] Selection Request for SLUG:', slug);
 
     if (!slug) {
@@ -269,7 +346,7 @@ function AppContent() {
     }
 
     setCurrentPost(null);
-    navTo('post');
+    navTo('post', { slug, replace: replaceHistory });
     setLoading(true);
 
     try {
@@ -294,8 +371,16 @@ function AppContent() {
 
   const handleViewProfile = useCallback((userId: string) => {
     setCurrentProfileId(userId);
-    navTo('profile');
+    navTo('profile', { profileId: userId });
   }, [navTo]);
+
+  useEffect(() => {
+    const route = getRouteState(window.location.pathname);
+
+    if (route.view === 'post' && route.slug) {
+      void handleSelectPost(route.slug, true);
+    }
+  }, [handleSelectPost]);
 
   const handleSavePost = async (data: Partial<BlogPost>) => {
     try {
