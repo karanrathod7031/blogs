@@ -6,6 +6,8 @@ interface OptimizedImageProps {
   alt: string;
   className?: string;
   aspectRatio?: string;
+  fit?: 'cover' | 'contain';
+  imgClassName?: string;
   onLoaded?: () => void;
 }
 
@@ -14,6 +16,8 @@ export default function OptimizedImage({
   alt, 
   className = "", 
   aspectRatio = "aspect-video",
+  fit = 'cover',
+  imgClassName = "",
   onLoaded 
 }: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -59,7 +63,7 @@ export default function OptimizedImage({
             scale: isLoaded ? 1 : 1.05
           }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="w-full h-full object-cover"
+          className={`w-full h-full ${fit === 'contain' ? 'object-contain' : 'object-cover'} ${imgClassName}`}
         />
       )}
     </div>

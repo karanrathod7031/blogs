@@ -7,7 +7,7 @@
 type RequestIdentifier = string;
 
 class RequestOrchestrator {
-  private activeRequests: Map<RequestIdentifier, Promise<any>> = new Map();
+  private activeRequests: Map<RequestIdentifier, Promise<unknown>> = new Map();
   private maxRetries = 3;
 
   /**
@@ -17,7 +17,7 @@ class RequestOrchestrator {
   async collapse<T>(id: RequestIdentifier, requestFn: () => Promise<T>): Promise<T> {
     if (this.activeRequests.has(id)) {
       console.debug(`[Scaling] Collapsing duplicate request: ${id}`);
-      return this.activeRequests.get(id);
+      return this.activeRequests.get(id) as Promise<T>;
     }
 
     const requestPromise = this.retry(requestFn);

@@ -435,8 +435,10 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
               <OptimizedImage 
                 src={post.coverImage} 
                 alt={post.title} 
-                className="rounded-3xl shadow-md border border-border/50 mb-8" 
-                aspectRatio="aspect-video"
+                className="mb-8 rounded-3xl border border-border/50 bg-bg-soft shadow-md" 
+                aspectRatio=""
+                fit="contain"
+                imgClassName="h-auto max-h-[75vh] w-full"
               />
             )}
 
