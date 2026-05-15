@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogIn, LogOut, Menu, X, Plus } from 'lucide-react';
+import { LogIn, LogOut, Plus, Home, LayoutDashboard, Shield } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { useAuthState } from '../../hooks/useAuthState';
 import { useNotification } from '../ui/Toast';
@@ -20,7 +20,6 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
   const { user, profile, loading } = useAuthState();
   const { notify } = useNotification();
   const [scrolled, setScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const cursorRef = useRef<HTMLDivElement>(null);
 
@@ -166,88 +165,21 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
 
           <div className="flex items-center gap-3 md:hidden">
             <ThemeToggle />
-            <button 
-              className="p-2 bg-bg-soft border border-border rounded-full text-ink"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
+            {!loading && !user && (
+              <button 
+                onClick={handleSignIn}
+                disabled={signingIn}
+                className="flex items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-xs font-black text-slate-900 shadow-lg shadow-accent/20 disabled:opacity-50"
+              >
+                <LogIn className="h-4 w-4" />
+                <span>{signingIn ? '...' : 'Editor'}</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-x-4 top-20 z-50 bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-clean md:hidden"
-          >
-            <div className="flex flex-col gap-4">
-              {navLinks.map((link) => (
-                <button 
-                  key={link.name}
-                  onClick={() => {
-                    onViewChange(link.view);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`text-lg font-black text-left py-2 border-b border-slate-800/50 ${activeView === link.view ? 'text-accent' : 'text-slate-300'}`}
-                >
-                  {link.name}
-                </button>
-              ))}
-              {user && (
-                <button 
-                  onClick={() => {
-                    onViewChange('admin');
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`text-lg font-black text-left py-2 border-b border-border/50 ${activeView === 'admin' ? 'text-accent' : 'text-ink-muted'}`}
-                >
-                  Studio
-                </button>
-              )}
-              {profile?.role === 'admin' || user?.email === 'rk.upk2345678@gmail.com' ? (
-                <button 
-                  onClick={() => {
-                    onViewChange('admin-panel');
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`text-lg font-black text-left py-2 border-b border-border/50 ${activeView === 'admin-panel' ? 'text-accent' : 'text-ink-muted'}`}
-                >
-                  Admin Panel
-                </button>
-              ) : null}
-              {user ? (
-                <button 
-                  onClick={handleSignOut}
-                  className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-bg-soft px-4 py-4 font-black text-xs uppercase tracking-widest text-ink-muted hover:text-rose-500 transition-colors border border-border"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sign Out
-                </button>
-              ) : (
-
-                <button 
-                  onClick={() => {
-                    handleSignIn();
-                    setMobileMenuOpen(false);
-                  }}
-                  disabled={signingIn}
-                  className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-4 font-black text-xs uppercase tracking-widest text-slate-900 shadow-lg shadow-accent/20 disabled:opacity-50 transition-all active:scale-95"
-                >
-                  <LogIn className="h-4 w-4" />
-                  {signingIn ? 'Authenticating...' : 'Editor Access'}
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <main className="flex-grow pt-20 md:pt-32 pb-12 md:pb-24">
+      <main className="flex-grow pt-20 md:pt-32 pb-28 md:pb-24">
         <div className="max-w-7xl mx-auto px-4 md:px-10">
           <AnimatePresence mode="wait">
             <motion.div
@@ -276,6 +208,54 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
             </motion.button>
           )}
         </AnimatePresence>
+
+        <div className="fixed inset-x-4 bottom-4 z-50 md:hidden">
+          <div className="mx-auto flex max-w-md items-center justify-between gap-2 rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-2 shadow-2xl backdrop-blur-xl">
+            <button
+              onClick={() => onViewChange('list')}
+              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black transition-all ${
+                activeView === 'list' ? 'bg-accent text-slate-900' : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <Home className="h-4 w-4 shrink-0" />
+              <span className="truncate">Hub</span>
+            </button>
+
+            {user && (
+              <button
+                onClick={() => onViewChange('admin')}
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black transition-all ${
+                  activeView === 'admin' ? 'bg-accent text-slate-900' : 'text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                <LayoutDashboard className="h-4 w-4 shrink-0" />
+                <span className="truncate">Studio</span>
+              </button>
+            )}
+
+            {(profile?.role === 'admin' || user?.email === 'rk.upk2345678@gmail.com') && (
+              <button
+                onClick={() => onViewChange('admin-panel')}
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black transition-all ${
+                  activeView === 'admin-panel' ? 'bg-accent text-slate-900' : 'text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                <Shield className="h-4 w-4 shrink-0" />
+                <span className="truncate">Admin</span>
+              </button>
+            )}
+
+            {user && (
+              <button
+                onClick={handleSignOut}
+                className="flex items-center justify-center rounded-2xl px-3 py-3 text-slate-300 transition-all hover:bg-white/5 hover:text-rose-400"
+                title="Sign Out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
       </main>
 
       <footer id="main-footer" className="bg-bg-soft border-t border-border py-10 md:py-16">
