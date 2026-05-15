@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogIn, LogOut, Plus, Home, LayoutDashboard, Shield, Search, SquarePen, CircleUserRound } from 'lucide-react';
+import { LogIn, LogOut, Plus, Home, LayoutDashboard, Shield } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { useAuthState } from '../../hooks/useAuthState';
 import { useNotification } from '../ui/Toast';
@@ -74,22 +74,6 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
   const navLinks: { name: string, view: View }[] = [
     { name: 'Network Hub', view: 'list' },
   ];
-
-  const isAdmin = profile?.role === 'admin' || user?.email === 'rk.upk2345678@gmail.com';
-
-  const handleMobileSearch = () => {
-    if (activeView !== 'list') {
-      onViewChange('list');
-    }
-
-    window.setTimeout(() => {
-      const searchInput = document.getElementById('feed-search') as HTMLInputElement | null;
-      if (searchInput) {
-        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        searchInput.focus();
-      }
-    }, activeView === 'list' ? 80 : 320);
-  };
 
   return (
     <div className="min-h-screen flex flex-col selection:bg-accent/20 selection:text-accent">
@@ -237,96 +221,59 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
         </AnimatePresence>
 
         <div
-          className="pointer-events-none fixed inset-x-0 z-50 md:hidden"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px))' }}
+          className="pointer-events-none fixed inset-x-3 z-50 md:hidden"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
         >
-          <div className="pointer-events-auto mx-auto flex w-full max-w-lg items-center justify-between border-t border-white/10 bg-slate-950/92 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+0.7rem)] pt-3 shadow-[0_-14px_36px_rgba(2,6,23,0.45)] backdrop-blur-xl">
+          <div className="pointer-events-auto mx-auto flex w-full max-w-md items-center justify-between gap-2 rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-2 shadow-2xl backdrop-blur-xl">
             <button
               onClick={() => onViewChange('list')}
-              className={`flex h-12 w-12 items-center justify-center rounded-full transition-all ${
+              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
                 activeView === 'list'
-                  ? 'bg-accent/12 text-accent shadow-[0_0_20px_rgba(var(--accent-rgb),0.18)]'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  ? 'bg-accent text-slate-900'
+                  : 'text-slate-300 hover:bg-white/5'
               }`}
-              aria-label="Home"
-              title="Home"
             >
-              <Home className="h-7 w-7" strokeWidth={2.4} />
+              <Home className="h-4 w-4 shrink-0" />
+              <span className="truncate">Hub</span>
             </button>
 
-            <button
-              onClick={() => {
-                if (user) {
-                  onViewChange('admin');
-                } else {
-                  void handleSignIn();
-                }
-              }}
-              className={`flex h-12 w-12 items-center justify-center rounded-full transition-all ${
-                activeView === 'admin'
-                  ? 'bg-accent/12 text-accent shadow-[0_0_20px_rgba(var(--accent-rgb),0.18)]'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
-              }`}
-              aria-label="Studio"
-              title="Studio"
-            >
-              <SquarePen className="h-7 w-7" strokeWidth={2.2} />
-            </button>
+            {user && (
+              <button
+                onClick={() => onViewChange('admin')}
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
+                  activeView === 'admin'
+                    ? 'bg-accent text-slate-900'
+                    : 'text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                <LayoutDashboard className="h-4 w-4 shrink-0" />
+                <span className="truncate">Studio</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => {
-                if (user && onNew) {
-                  onNew();
-                } else {
-                  void handleSignIn();
-                }
-              }}
-              className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.04] text-white transition-all hover:bg-white/[0.08]"
-              aria-label="Create post"
-              title="Create post"
-            >
-              <Plus className="h-7 w-7" strokeWidth={2.5} />
-              {user && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500" />}
-            </button>
+            {(profile?.role === 'admin' || user?.email === 'rk.upk2345678@gmail.com') && (
+              <button
+                onClick={() => onViewChange('admin-panel')}
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
+                  activeView === 'admin-panel'
+                    ? 'bg-accent text-slate-900'
+                    : 'text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                <Shield className="h-4 w-4 shrink-0" />
+                <span className="truncate">Admin</span>
+              </button>
+            )}
 
-            <button
-              onClick={handleMobileSearch}
-              className="flex h-12 w-12 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-white/5 hover:text-white"
-              aria-label="Search"
-              title="Search"
-            >
-              <Search className="h-7 w-7" strokeWidth={2.2} />
-            </button>
-
-            <button
-              onClick={() => {
-                if (!user) {
-                  void handleSignIn();
-                  return;
-                }
-
-                onViewChange(isAdmin ? 'admin-panel' : 'admin');
-              }}
-              className={`relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full transition-all ${
-                activeView === 'admin-panel' || activeView === 'admin' ? 'ring-2 ring-accent/45 ring-offset-2 ring-offset-slate-950' : ''
-              }`}
-              aria-label={isAdmin ? 'Admin panel' : 'Profile'}
-              title={isAdmin ? 'Admin panel' : 'Profile'}
-            >
-              {user?.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || 'Profile'}
-                  className="h-11 w-11 rounded-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-white">
-                  {isAdmin ? <Shield className="h-6 w-6" strokeWidth={2.2} /> : <CircleUserRound className="h-6 w-6" strokeWidth={2.2} />}
-                </div>
-              )}
-              <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-slate-950 bg-rose-500" />
-            </button>
+            {user && (
+              <button
+                onClick={handleSignOut}
+                className="flex items-center justify-center rounded-2xl px-3 py-3.5 text-slate-300 transition-all hover:bg-white/5 hover:text-rose-400"
+                title="Sign Out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       </main>
