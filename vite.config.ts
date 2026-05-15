@@ -31,7 +31,6 @@ export default defineConfig(({mode}) => {
     plugins: [react(), tailwindcss()],
     base: '/',
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       ...firebaseEnv,
     },
     resolve: {
@@ -45,7 +44,42 @@ export default defineConfig(({mode}) => {
       outDir: 'dist',
       assetsDir: 'assets',
       emptyOutDir: true,
-      sourcemap: false
+      sourcemap: false,
+      chunkSizeWarningLimit: 700,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('/firebase/')) {
+                return 'firebase-vendor';
+              }
+
+              if (
+                id.includes('/@tiptap/') ||
+                id.includes('/prosemirror-') ||
+                id.includes('/tiptap-markdown/') ||
+                id.includes('/turndown')
+              ) {
+                return 'editor-vendor';
+              }
+
+              if (
+                id.includes('/recharts/') ||
+                id.includes('/react-markdown/') ||
+                id.includes('/remark-gfm/') ||
+                id.includes('/rehype-raw/') ||
+                id.includes('/date-fns/')
+              ) {
+                return 'content-vendor';
+              }
+
+              if (id.includes('/lucide-react/') || id.includes('/motion/')) {
+                return 'ui-vendor';
+              }
+            }
+          }
+        }
+      }
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
