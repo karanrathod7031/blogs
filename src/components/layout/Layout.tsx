@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogIn, LogOut, Plus, Home, LayoutDashboard, Shield } from 'lucide-react';
+import { LogIn, LogOut, Plus, Home, User } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { useAuthState } from '../../hooks/useAuthState';
 import { useNotification } from '../ui/Toast';
@@ -224,7 +224,7 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
           className="pointer-events-none fixed inset-x-3 z-50 md:hidden"
           style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
         >
-          <div className="pointer-events-auto mx-auto flex w-full max-w-md items-center justify-between gap-2 rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-2 shadow-2xl backdrop-blur-xl">
+          <div className="pointer-events-auto mx-auto flex w-full max-w-sm items-center justify-between gap-2 rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-2 shadow-2xl backdrop-blur-xl">
             <button
               onClick={() => onViewChange('list')}
               className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
@@ -234,46 +234,41 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
               }`}
             >
               <Home className="h-4 w-4 shrink-0" />
-              <span className="truncate">Hub</span>
+              <span className="truncate">Home</span>
             </button>
 
-            {user && (
-              <button
-                onClick={() => onViewChange('admin')}
-                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
-                  activeView === 'admin'
-                    ? 'bg-accent text-slate-900'
-                    : 'text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                <LayoutDashboard className="h-4 w-4 shrink-0" />
-                <span className="truncate">Studio</span>
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (user && onNew) {
+                  onNew();
+                } else {
+                  void handleSignIn();
+                }
+              }}
+              className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black text-slate-300 transition-all hover:bg-white/5"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="truncate">Add</span>
+            </button>
 
-            {(profile?.role === 'admin' || user?.email === 'rk.upk2345678@gmail.com') && (
-              <button
-                onClick={() => onViewChange('admin-panel')}
-                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
-                  activeView === 'admin-panel'
-                    ? 'bg-accent text-slate-900'
-                    : 'text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                <Shield className="h-4 w-4 shrink-0" />
-                <span className="truncate">Admin</span>
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (!user) {
+                  void handleSignIn();
+                  return;
+                }
 
-            {user && (
-              <button
-                onClick={handleSignOut}
-                className="flex items-center justify-center rounded-2xl px-3 py-3.5 text-slate-300 transition-all hover:bg-white/5 hover:text-rose-400"
-                title="Sign Out"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            )}
+                onViewChange(profile?.role === 'admin' || user.email === 'rk.upk2345678@gmail.com' ? 'admin-panel' : 'admin');
+              }}
+              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
+                activeView === 'admin' || activeView === 'admin-panel'
+                  ? 'bg-accent text-slate-900'
+                  : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <User className="h-4 w-4 shrink-0" />
+              <span className="truncate">Account</span>
+            </button>
           </div>
         </div>
       </main>
