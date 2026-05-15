@@ -51,6 +51,8 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
           const canvas = document.createElement('canvas');
           // Square target for DP
           const SIZE = 400;
+          const width = img.width;
+          const height = img.height;
           
           canvas.width = SIZE;
           canvas.height = SIZE;
@@ -134,9 +136,9 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-2xl mx-auto"
+      className="mx-auto w-full max-w-2xl"
     >
-      <form onSubmit={handleSave} className="space-y-8 bg-transparent py-8">
+      <form onSubmit={handleSave} className="space-y-6 bg-transparent py-4 md:space-y-8 md:py-8">
         <div className="flex flex-col items-center gap-6">
           <div className="relative" ref={menuRef}>
             <div 
@@ -165,7 +167,7 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
                   initial={{ opacity: 0, scale: 0.9, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                  className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-48 bg-card rounded-2xl shadow-2xl border border-border py-2 z-50 overflow-hidden"
+                  className="absolute top-full left-1/2 z-50 mt-3 w-48 -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-card py-2 shadow-2xl sm:left-0 sm:translate-x-0"
                 >
                   <button
                     type="button"
@@ -205,7 +207,7 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-5 md:space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-ink-muted/60">
@@ -279,12 +281,12 @@ export function ProfileEditor({ onNotify }: ProfileEditorProps) {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="relative max-w-2xl w-full"
+              className="relative w-full max-w-2xl"
               onClick={e => e.stopPropagation()}
             >
               <button
                 onClick={() => setShowFullImage(false)}
-                className="absolute -top-12 right-0 p-2 text-ink-muted hover:text-ink transition-colors"
+                className="absolute -top-12 right-0 p-2 text-ink-muted transition-colors hover:text-ink"
                 title="Close viewer"
               >
                 <X className="w-8 h-8" />

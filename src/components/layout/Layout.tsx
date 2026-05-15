@@ -237,19 +237,19 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
               <span className="truncate">Home</span>
             </button>
 
-            <button
-              onClick={() => {
-                if (user && onNew) {
-                  onNew();
-                } else {
-                  void handleSignIn();
-                }
-              }}
-              className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black text-slate-300 transition-all hover:bg-white/5"
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              <span className="truncate">Add</span>
-            </button>
+            {user && (
+              <button
+                onClick={() => {
+                  if (onNew) {
+                    onNew();
+                  }
+                }}
+                className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black text-slate-300 transition-all hover:bg-white/5"
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                <span className="truncate">Add</span>
+              </button>
+            )}
 
             <button
               onClick={() => {
@@ -258,10 +258,10 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
                   return;
                 }
 
-                onViewChange(profile?.role === 'admin' || user.email === 'rk.upk2345678@gmail.com' ? 'admin-panel' : 'admin');
+                onViewChange('admin');
               }}
-              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
-                activeView === 'admin' || activeView === 'admin-panel'
+              className={`flex min-w-0 ${user ? 'flex-1' : 'flex-[1.15]'} items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
+                activeView === 'admin'
                   ? 'bg-accent text-slate-900'
                   : 'text-slate-300 hover:bg-white/5'
               }`}

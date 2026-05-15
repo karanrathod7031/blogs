@@ -24,10 +24,10 @@ export default function Dashboard({ posts, onNew, onEdit, onDelete, onView, onNo
   );
 
   return (
-    <div className="space-y-6 md:space-y-10">
+    <div className="space-y-5 md:space-y-10">
       {/* Dashboard Nav */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-8 bg-card p-4 md:p-8 rounded-2xl md:rounded-3xl border border-border shadow-2xl">
-        <div className="flex gap-1 items-center bg-bg-soft p-1 rounded-xl md:rounded-2xl w-full md:w-auto border border-border">
+        <div className="flex gap-1 items-center bg-bg-soft p-1 rounded-xl md:rounded-2xl w-full md:w-auto border border-border overflow-x-auto">
           <button 
             onClick={() => setActiveTab('posts')}
             className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-3 md:px-5 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold transition-all ${activeTab === 'posts' ? 'bg-card text-accent border border-border shadow-sm' : 'text-ink-muted hover:text-ink'}`}
@@ -63,7 +63,7 @@ export default function Dashboard({ posts, onNew, onEdit, onDelete, onView, onNo
             className="space-y-6"
           >
             {/* Filter Bar */}
-            <div className="relative max-w-md">
+            <div className="relative w-full max-w-md">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted" />
               <input 
                 type="text"
@@ -132,16 +132,17 @@ export default function Dashboard({ posts, onNew, onEdit, onDelete, onView, onNo
               {filteredPosts.map((post) => (
                 <div key={post.id} className="bg-card p-4 rounded-xl border border-border space-y-3 shadow-md">
                   <div className="flex justify-between items-start">
-                    <div className="space-y-1.5">
+                    <div className="min-w-0 space-y-1.5">
                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${post.published ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}`}>
                         {post.published ? 'Published' : 'Draft'}
                       </span>
-                      <h3 className="font-bold text-ink leading-tight text-sm">{post.title}</h3>
+                      <h3 className="font-bold text-ink leading-tight text-sm break-words">{post.title}</h3>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center pt-3 border-t border-border">
+                  <div className="flex flex-col gap-3 pt-3 border-t border-border">
                     <span className="text-[10px] font-black text-ink-muted uppercase">{format(post.updatedAt.toDate(), 'MMM d')}</span>
-                    <div className="flex gap-4">
+                    <div className="flex items-center gap-4">
+                      <button onClick={() => onView(post.slug)} className="text-ink-muted font-black text-[10px] uppercase tracking-widest">View</button>
                       <button onClick={() => onEdit(post)} className="text-accent font-black text-[10px] uppercase tracking-widest">Edit</button>
                       <button onClick={() => onDelete(post.id)} className="text-rose-500 font-black text-[10px] uppercase tracking-widest">Delete</button>
                     </div>
