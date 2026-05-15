@@ -32,8 +32,19 @@ type RouteState = {
   profileId?: string;
 };
 
-function getRouteState(pathname: string): RouteState {
+function getRouteState(pathname: string, search = ''): RouteState {
   const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+  const params = new URLSearchParams(search);
+  const postSlug = params.get('post');
+  const profileIdFromQuery = params.get('profile');
+
+  if (postSlug) {
+    return { view: 'post', slug: decodeURIComponent(postSlug) };
+  }
+
+  if (profileIdFromQuery) {
+    return { view: 'profile', profileId: decodeURIComponent(profileIdFromQuery) };
+  }
 
   if (normalizedPath.startsWith('/post/')) {
     const slug = decodeURIComponent(normalizedPath.slice('/post/'.length));
@@ -63,7 +74,7 @@ function getRouteState(pathname: string): RouteState {
 function getPathForView(view: View, options?: { slug?: string; profileId?: string }): string {
   switch (view) {
     case 'post':
-      return options?.slug ? `/post/${encodeURIComponent(options.slug)}` : '/';
+      return options?.slug ? `/?post=${encodeURIComponent(options.slug)}` : '/';
     case 'profile':
       return options?.profileId ? `/profile/${encodeURIComponent(options.profileId)}` : '/';
     case 'admin':
@@ -79,7 +90,7 @@ function getPathForView(view: View, options?: { slug?: string; profileId?: strin
 }
 
 function AppContent() {
-  const initialRoute = getRouteState(window.location.pathname);
+  const initialRoute = getRouteState(window.location.pathname, window.location.search);
   const [view, setView] = useState<View>(initialRoute.view);
   const [prevView, setPrevView] = useState<View>('list');
 
@@ -132,7 +143,7 @@ function AppContent() {
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      const route = getRouteState(window.location.pathname);
+      const route = getRouteState(window.location.pathname, window.location.search);
       setCurrentProfileId(route.profileId || null);
       setCurrentPost(null);
       setEditingPost(undefined);
@@ -142,8 +153,8 @@ function AppContent() {
     window.addEventListener('popstate', handlePopState);
 
     if (!window.history.state) {
-      const route = getRouteState(window.location.pathname);
-      window.history.replaceState(route, '', window.location.pathname);
+      const route = getRouteState(window.location.pathname, window.location.search);
+      window.history.replaceState(route, '', `${window.location.pathname}${window.location.search}`);
     }
 
     return () => window.removeEventListener('popstate', handlePopState);
@@ -250,7 +261,7 @@ function AppContent() {
   }, [view, user, fetchPosts]);
 
   useEffect(() => {
-    const route = getRouteState(window.location.pathname);
+    const route = getRouteState(window.location.pathname, window.location.search);
 
     if (route.view === 'profile' && route.profileId) {
       setCurrentProfileId(route.profileId);
@@ -375,7 +386,7 @@ function AppContent() {
   }, [navTo]);
 
   useEffect(() => {
-    const route = getRouteState(window.location.pathname);
+    const route = getRouteState(window.location.pathname, window.location.search);
 
     if (route.view === 'post' && route.slug) {
       void handleSelectPost(route.slug, true);
