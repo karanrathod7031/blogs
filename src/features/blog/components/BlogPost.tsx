@@ -826,7 +826,7 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
                 </button>
               </div>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="mt-6 flex flex-wrap gap-3">
                 {shareActions.map((action) => {
                   const Icon = action.icon;
 
@@ -834,15 +834,13 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
                     <button
                       key={action.label}
                       onClick={action.onClick}
-                      className="group rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-4 text-left transition-all hover:-translate-y-0.5 hover:border-accent/30 hover:bg-white/[0.05]"
+                      aria-label={action.label}
+                      title={action.label}
+                      className="group flex h-16 w-16 items-center justify-center rounded-[1.4rem] border border-white/10 bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-accent/30 hover:bg-white/[0.05]"
                     >
                       <div className={`inline-flex rounded-2xl border p-3 ${action.accent}`}>
                         <Icon className="h-5 w-5" />
                       </div>
-                      <p className="mt-4 text-sm font-black text-white">{action.label}</p>
-                      <p className="mt-1 text-xs font-medium text-slate-400 group-hover:text-slate-300">
-                        Open share action
-                      </p>
                     </button>
                   );
                 })}

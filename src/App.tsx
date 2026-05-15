@@ -31,6 +31,53 @@ function AppContent() {
   const [prevView, setPrevView] = useState<View>('list');
 
   useEffect(() => {
+    let cancelled = false;
+
+    const checkForFreshDeployment = async () => {
+      try {
+        const response = await fetch(`/version.json?ts=${Date.now()}`, {
+          cache: 'no-store'
+        });
+
+        if (!response.ok) return;
+
+        const payload = await response.json() as { version?: string };
+        if (!cancelled && payload.version && payload.version !== __APP_VERSION__) {
+          window.location.reload();
+        }
+      } catch {
+        // Ignore transient network/cache issues.
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void checkForFreshDeployment();
+      }
+    };
+
+    const handleFocus = () => {
+      void checkForFreshDeployment();
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void checkForFreshDeployment();
+      }
+    }, 60000);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       if (event.state?.view) {
         setView(event.state.view);

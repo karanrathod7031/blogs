@@ -6,6 +6,7 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  const buildVersion = process.env.VERCEL_GIT_COMMIT_SHA || `${Date.now()}`;
   
   // Load Firebase config from JSON if it exists (for AI Studio/Local Dev)
   let firebaseEnv = {};
@@ -28,10 +29,24 @@ export default defineConfig(({mode}) => {
   }
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'emit-build-version',
+        generateBundle() {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'version.json',
+            source: JSON.stringify({ version: buildVersion }, null, 2)
+          });
+        }
+      }
+    ],
     base: '/',
     define: {
       ...firebaseEnv,
+      __APP_VERSION__: JSON.stringify(buildVersion),
     },
     resolve: {
       alias: {
