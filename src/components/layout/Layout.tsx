@@ -240,11 +240,13 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
           className="pointer-events-none fixed inset-x-0 z-50 md:hidden"
           style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px))' }}
         >
-          <div className="pointer-events-auto mx-auto flex w-full max-w-lg items-center justify-between border-t border-slate-200/80 bg-white/95 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+0.7rem)] pt-3 shadow-[0_-12px_32px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+          <div className="pointer-events-auto mx-auto flex w-full max-w-lg items-center justify-between border-t border-white/10 bg-slate-950/92 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+0.7rem)] pt-3 shadow-[0_-14px_36px_rgba(2,6,23,0.45)] backdrop-blur-xl">
             <button
               onClick={() => onViewChange('list')}
               className={`flex h-12 w-12 items-center justify-center rounded-full transition-all ${
-                activeView === 'list' ? 'text-slate-950' : 'text-slate-500 hover:text-slate-900'
+                activeView === 'list'
+                  ? 'bg-accent/12 text-accent shadow-[0_0_20px_rgba(var(--accent-rgb),0.18)]'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
               }`}
               aria-label="Home"
               title="Home"
@@ -261,7 +263,9 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
                 }
               }}
               className={`flex h-12 w-12 items-center justify-center rounded-full transition-all ${
-                activeView === 'admin' ? 'text-slate-950' : 'text-slate-500 hover:text-slate-900'
+                activeView === 'admin'
+                  ? 'bg-accent/12 text-accent shadow-[0_0_20px_rgba(var(--accent-rgb),0.18)]'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
               }`}
               aria-label="Studio"
               title="Studio"
@@ -277,7 +281,7 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
                   void handleSignIn();
                 }
               }}
-              className="relative flex h-12 w-12 items-center justify-center rounded-full text-slate-500 transition-all hover:text-slate-900"
+              className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.04] text-white transition-all hover:bg-white/[0.08]"
               aria-label="Create post"
               title="Create post"
             >
@@ -287,7 +291,7 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
 
             <button
               onClick={handleMobileSearch}
-              className="flex h-12 w-12 items-center justify-center rounded-full text-slate-500 transition-all hover:text-slate-900"
+              className="flex h-12 w-12 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-white/5 hover:text-white"
               aria-label="Search"
               title="Search"
             >
@@ -304,7 +308,7 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
                 onViewChange(isAdmin ? 'admin-panel' : 'admin');
               }}
               className={`relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full transition-all ${
-                activeView === 'admin-panel' || activeView === 'admin' ? 'ring-2 ring-slate-900/15' : ''
+                activeView === 'admin-panel' || activeView === 'admin' ? 'ring-2 ring-accent/45 ring-offset-2 ring-offset-slate-950' : ''
               }`}
               aria-label={isAdmin ? 'Admin panel' : 'Profile'}
               title={isAdmin ? 'Admin panel' : 'Profile'}
@@ -317,11 +321,11 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-900">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-white">
                   {isAdmin ? <Shield className="h-6 w-6" strokeWidth={2.2} /> : <CircleUserRound className="h-6 w-6" strokeWidth={2.2} />}
                 </div>
               )}
-              <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-white bg-rose-500" />
+              <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-slate-950 bg-rose-500" />
             </button>
           </div>
         </div>
