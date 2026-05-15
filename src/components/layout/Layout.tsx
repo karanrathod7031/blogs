@@ -179,7 +179,7 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
         </div>
       </header>
 
-      <main className="flex-grow pt-20 md:pt-32 pb-28 md:pb-24">
+      <main className="flex-grow pt-20 pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] md:pt-32 md:pb-24">
         <div className="max-w-7xl mx-auto px-4 md:px-10">
           <AnimatePresence mode="wait">
             <motion.div
@@ -202,18 +202,22 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0, opacity: 0, y: 20 }}
               onClick={onNew}
-              className="md:hidden fixed bottom-6 right-6 z-40 w-16 h-16 bg-accent text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform ring-4 ring-white"
+              className="md:hidden fixed right-5 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-accent text-white shadow-2xl ring-4 ring-white transition-transform active:scale-90"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 6.5rem)' }}
             >
               <Plus className="w-8 h-8" />
             </motion.button>
           )}
         </AnimatePresence>
 
-        <div className="fixed inset-x-4 bottom-4 z-50 md:hidden">
-          <div className="mx-auto flex max-w-md items-center justify-between gap-2 rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-2 shadow-2xl backdrop-blur-xl">
+        <div
+          className="pointer-events-none fixed inset-x-3 z-50 md:hidden"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+        >
+          <div className="pointer-events-auto mx-auto flex w-full max-w-md items-center justify-between gap-2 rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-2 shadow-2xl backdrop-blur-xl">
             <button
               onClick={() => onViewChange('list')}
-              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black transition-all ${
+              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
                 activeView === 'list' ? 'bg-accent text-slate-900' : 'text-slate-300 hover:bg-white/5'
               }`}
             >
@@ -224,7 +228,7 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
             {user && (
               <button
                 onClick={() => onViewChange('admin')}
-                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black transition-all ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
                   activeView === 'admin' ? 'bg-accent text-slate-900' : 'text-slate-300 hover:bg-white/5'
                 }`}
               >
@@ -236,7 +240,7 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
             {(profile?.role === 'admin' || user?.email === 'rk.upk2345678@gmail.com') && (
               <button
                 onClick={() => onViewChange('admin-panel')}
-                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black transition-all ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3.5 text-[11px] font-black transition-all ${
                   activeView === 'admin-panel' ? 'bg-accent text-slate-900' : 'text-slate-300 hover:bg-white/5'
                 }`}
               >
@@ -248,7 +252,7 @@ export default function Layout({ children, activeView, onViewChange, onNew, isLo
             {user && (
               <button
                 onClick={handleSignOut}
-                className="flex items-center justify-center rounded-2xl px-3 py-3 text-slate-300 transition-all hover:bg-white/5 hover:text-rose-400"
+                className="flex items-center justify-center rounded-2xl px-3 py-3.5 text-slate-300 transition-all hover:bg-white/5 hover:text-rose-400"
                 title="Sign Out"
               >
                 <LogOut className="h-4 w-4" />
