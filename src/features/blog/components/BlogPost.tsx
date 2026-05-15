@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/re
 import { 
   ArrowLeft, 
   Share2, 
+  Copy,
   Calendar, 
   Clock, 
   ArrowRight, 
@@ -14,6 +15,9 @@ import {
   Twitter,
   Facebook,
   Link as LinkIcon,
+  Mail,
+  Send,
+  X as CloseIcon,
   Briefcase,
   DollarSign,
   MapPin
@@ -160,6 +164,7 @@ function RelatedPostSkeleton() {
 export default function BlogPostView({ post, onBack, onSelectPost, allPosts = [], onNotify, onViewProfile, loading: propLoading }: BlogPostProps) {
   const { user } = useAuthState();
   const [copied, setCopied] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [authorProfile, setAuthorProfile] = useState<UserProfile | null>(null);
   
   const [liked, setLiked] = useState(false);
@@ -205,6 +210,19 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
     fetchInteractions();
     window.scrollTo(0, 0);
   }, [post?.authorId, post?.id, user]);
+
+  useEffect(() => {
+    if (!shareOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShareOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [shareOpen]);
 
   const handleLike = async () => {
     if (!user) {
@@ -253,11 +271,77 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
       .slice(0, 3);
   }, [post, allPosts]);
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return window.location.href;
+  }, [post?.id]);
+
+  const handleCopyLink = async () => {
+    await navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const openShareWindow = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer,width=720,height=640');
+  };
+
+  const handleNativeShare = async () => {
+    if (!post || typeof navigator === 'undefined' || !navigator.share) return;
+
+    try {
+      await navigator.share({
+        title: post.title,
+        text: post.excerpt || `Read ${post.title} on Network Hub`,
+        url: shareUrl
+      });
+    } catch {
+      // User cancelled share.
+    }
+  };
+
+  const shareActions = useMemo(() => {
+    if (!post) return [];
+
+    const encodedUrl = encodeURIComponent(shareUrl);
+    const encodedTitle = encodeURIComponent(post.title);
+    const encodedSummary = encodeURIComponent(post.excerpt || `Read ${post.title} on Network Hub`);
+
+    return [
+      {
+        label: 'WhatsApp',
+        icon: MessageCircle,
+        accent: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
+        onClick: () => openShareWindow(`https://wa.me/?text=${encodedTitle}%20${encodedUrl}`)
+      },
+      {
+        label: 'Facebook',
+        icon: Facebook,
+        accent: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
+        onClick: () => openShareWindow(`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`)
+      },
+      {
+        label: 'X',
+        icon: Twitter,
+        accent: 'bg-slate-100/10 text-slate-100 border-slate-400/20',
+        onClick: () => openShareWindow(`https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedSummary}`)
+      },
+      {
+        label: 'Telegram',
+        icon: Send,
+        accent: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
+        onClick: () => openShareWindow(`https://t.me/share/url?url=${encodedUrl}&text=${encodedSummary}`)
+      },
+      {
+        label: 'Email',
+        icon: Mail,
+        accent: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
+        onClick: () => {
+          window.location.href = `mailto:?subject=${encodedTitle}&body=${encodedSummary}%0A%0A${encodedUrl}`;
+        }
+      }
+    ];
+  }, [post, shareUrl]);
 
   const toc = useMemo(() => {
     if (!post) return [];
@@ -471,11 +555,11 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
 
             <div className="flex items-center gap-2">
               <button 
-                onClick={handleCopyLink}
-                className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black transition-all ${copied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-bg-soft text-ink-muted hover:bg-card border border-border'}`}
+                onClick={() => setShareOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black transition-all bg-bg-soft text-ink-muted hover:bg-card border border-border"
               >
                 <Share2 className="w-4 h-4" />
-                {copied ? 'Copied' : 'Share'}
+                Share
               </button>
             </div>
           </div>
@@ -705,6 +789,99 @@ export default function BlogPostView({ post, onBack, onSelectPost, allPosts = []
               </div>
             </div>
           </motion.section>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {shareOpen && post && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm"
+            onClick={() => setShareOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-2xl rounded-[2rem] border border-white/10 bg-[#070b16] p-6 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-accent">Share Entry</p>
+                  <h3 className="mt-2 text-2xl font-black text-white">Distribute this post</h3>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-400">
+                    Share this article across your network or copy the direct link. The popup uses the current post URL automatically.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setShareOpen(false)}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-3 text-slate-300 transition-all hover:border-accent/40 hover:text-white"
+                >
+                  <CloseIcon className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {shareActions.map((action) => {
+                  const Icon = action.icon;
+
+                  return (
+                    <button
+                      key={action.label}
+                      onClick={action.onClick}
+                      className="group rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-4 text-left transition-all hover:-translate-y-0.5 hover:border-accent/30 hover:bg-white/[0.05]"
+                    >
+                      <div className={`inline-flex rounded-2xl border p-3 ${action.accent}`}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <p className="mt-4 text-sm font-black text-white">{action.label}</p>
+                      <p className="mt-1 text-xs font-medium text-slate-400 group-hover:text-slate-300">
+                        Open share action
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 rounded-[1.6rem] border border-white/10 bg-black/20 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-300">
+                    <span className="block truncate">{shareUrl}</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {typeof navigator !== 'undefined' && navigator.share && (
+                      <button
+                        onClick={handleNativeShare}
+                        className="rounded-2xl border border-accent/20 bg-accent/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-accent transition-all hover:bg-accent/20"
+                      >
+                        Open share
+                      </button>
+                    )}
+
+                    <button
+                      onClick={handleCopyLink}
+                      className={`rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-widest transition-all ${
+                        copied
+                          ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400'
+                          : 'border-white/10 bg-white/[0.04] text-white hover:border-accent/30 hover:text-accent'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Copy className="h-4 w-4" />
+                        {copied ? 'Copied' : 'Copy link'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
