@@ -25,6 +25,8 @@ interface BlogListProps {
   onPreviousPage?: () => void;
   onPageSelect?: (page: number) => void;
   hasMore?: boolean;
+  canGoPrevious?: boolean;
+  canGoNext?: boolean;
   currentPage?: number;
   knownPageCount?: number;
   loadingMore?: boolean;
@@ -137,6 +139,8 @@ export default function BlogList({
   onPreviousPage,
   onPageSelect,
   hasMore,
+  canGoPrevious = false,
+  canGoNext = false,
   currentPage = 1,
   knownPageCount = 1,
   loadingMore,
@@ -385,8 +389,8 @@ export default function BlogList({
           <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               onClick={onPreviousPage}
-              disabled={loadingMore || currentPage === 1}
-              className="px-4 py-2.5 bg-bg-soft border border-border rounded-xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+              disabled={loadingMore || !canGoPrevious}
+              className="px-4 py-2.5 bg-bg-soft border border-border rounded-xl text-xs font-black uppercase tracking-widest text-ink-muted transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 enabled:hover:border-accent enabled:hover:text-accent enabled:cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
               Back
@@ -405,10 +409,10 @@ export default function BlogList({
                   <button
                     onClick={() => onPageSelect?.(page)}
                     disabled={loadingMore || page === currentPage}
-                    className={`min-w-11 px-3 py-2.5 rounded-xl text-xs font-black transition-all shadow-sm border cursor-pointer ${
+                    className={`min-w-11 px-3 py-2.5 rounded-xl text-xs font-black transition-all shadow-sm border ${
                       page === currentPage
                         ? 'bg-accent text-slate-950 border-accent'
-                        : 'bg-bg-soft border-border text-ink-muted hover:border-accent hover:text-accent'
+                        : 'bg-bg-soft border-border text-ink-muted enabled:hover:border-accent enabled:hover:text-accent enabled:cursor-pointer'
                     } disabled:opacity-70 disabled:cursor-not-allowed`}
                   >
                     {page}
@@ -419,8 +423,8 @@ export default function BlogList({
 
             <button
               onClick={onNextPage}
-              disabled={loadingMore || !hasMore}
-              className="px-4 py-2.5 bg-bg-soft border border-border rounded-xl text-xs font-black uppercase tracking-widest text-ink-muted hover:border-accent hover:text-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+              disabled={loadingMore || !canGoNext}
+              className="px-4 py-2.5 bg-bg-soft border border-border rounded-xl text-xs font-black uppercase tracking-widest text-ink-muted transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 enabled:hover:border-accent enabled:hover:text-accent enabled:cursor-pointer"
             >
               {loadingMore ? (
                 <>

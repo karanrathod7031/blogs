@@ -135,15 +135,16 @@ function AppContent() {
   }, [view, user, fetchPosts]);
 
   const handleNextPage = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
-
     const nextPage = currentPage + 1;
+    const cachedNextPage = pageCache[nextPage];
+    const canGoNext = Boolean(cachedNextPage) || hasMore;
 
-    if (pageCache[nextPage]) {
-      setPosts(pageCache[nextPage]);
+    if (loadingMore || !canGoNext) return;
+
+    if (cachedNextPage) {
+      setPosts(cachedNextPage);
       setCurrentPage(nextPage);
       setLastDoc(cursorCache[nextPage] || null);
-      setKnownPageCount((prev) => Math.max(prev, hasMore ? nextPage + 1 : nextPage));
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -207,6 +208,9 @@ function AppContent() {
     setLastDoc(cursorCache[page] || null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentPage, cursorCache, pageCache]);
+
+  const canGoPrevious = currentPage > 1;
+  const canGoNext = Boolean(pageCache[currentPage + 1]) || hasMore;
 
   const handleSelectPost = useCallback(async (slug: string) => {
     console.log('[App] Selection Request for SLUG:', slug);
@@ -312,6 +316,8 @@ function AppContent() {
             currentPage={currentPage}
             knownPageCount={knownPageCount}
             hasMore={hasMore}
+            canGoPrevious={canGoPrevious}
+            canGoNext={canGoNext}
             loadingMore={loadingMore}
             loading={loading}
           />
