@@ -241,6 +241,7 @@ export default function BlogList({
           <div className="relative w-full md:max-w-md">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted" />
             <input
+              id="feed-search"
               type="text"
               placeholder="Search technical entries, trade dispatches, and engineering narratives..."
               value={searchTerm}
